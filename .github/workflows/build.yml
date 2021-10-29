@@ -30,7 +30,8 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: Build and analyze
         env:
-          GITHUB TOKEN: ${{ secrets.TOKEN }}
+          GITHUB USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
+          GITHUB TOKEN: ${{ secrets.GH_PACKAGE_REPO_PASSWORD }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           echo "Adding dummy env variables"
