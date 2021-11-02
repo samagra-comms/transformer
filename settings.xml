@@ -5,8 +5,8 @@
     <servers>
         <server>
             <id>github</id>
-            <username>${GH_PACKAGE_REPO_USERNAME}</username>
-            <password>${GH_PACKAGE_REPO_PASSWORD}</password>
+            <username>surabhi-mahawar</username>
+            <password>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</password>
         </server>
     </servers>
 </settings>
