@@ -31,7 +31,7 @@ jobs:
       - name: Build and analyze
         env:
           GITHUB USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
-          GITHUB TOKEN: ${{ secrets.GH_PACKAGE_REPO_PASSWORD }}
+          GITHUB TOKEN: ${{ secrets.GH_PACKAGE_REPO_READ_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           echo "Adding dummy env variables"
@@ -40,4 +40,4 @@ jobs:
           export PASSWORD=PASSWORD
           export TEMPLATE_ID=TEMPLATE_ID
           export SECURE_KEY=SECURE_KEY
-          mvn -s settings.xml verify
+          mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Samagra-Development_CDAC-Service
