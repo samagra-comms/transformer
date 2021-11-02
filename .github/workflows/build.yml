@@ -40,4 +40,4 @@ jobs:
           export PASSWORD=PASSWORD
           export TEMPLATE_ID=TEMPLATE_ID
           export SECURE_KEY=SECURE_KEY
-          mvn -s settings.xml -B verify
+          mvn -s settings.xml verify
