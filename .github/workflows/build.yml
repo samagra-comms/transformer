@@ -43,8 +43,6 @@ jobs:
               }
             ]
           output_file: .m2/settings.xml
-        run: |
-          cat .m2/settings.xml
       - name: Build and analyze
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
@@ -54,4 +52,5 @@ jobs:
           echo "Adding dummy env variables"
           export GITHUB_USERNAME=GITHUB_USERNAME
           export GITHUB_TOKEN=GITHUB_TOKEN
+          cat .m2/settings.xml
           mvn -s .m2/settings.xml -B verify  -DskipTests
