@@ -28,26 +28,6 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
-      - name: Maven settings xml file
-        uses: ./
-        with:
-          servers: >
-            [
-              {
-                "id": "some-id",
-                "username": "${env.USER}",
-                "password": "${env.PASS}",
-                "configuration": {
-                  "httpConfiguration": {
-                    "all": {
-                      "usePreemptive": "true"
-                    }
-                  }
-                }
-              }
-            ]
-      - run: |
-          cat ~/.m2/settings.xml
       - name: Build and analyze
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
