@@ -26,7 +26,7 @@
 		</repository>
 		<repository>
 			<id>github</id>
-			<name>Message Rosa</name>
+			<name>Github Message Rosa Package</name>
 			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
 			<snapshots>
 				<enabled>true</enabled>
@@ -146,7 +146,7 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>utils</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
+			<version>1.0.0</version>
 		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->
