@@ -1,7 +1,7 @@
 name: Build
 on:
   push:
-    branches: [main, gworkflow]
+    branches: [main, master, gworkflow]
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
@@ -32,8 +32,12 @@ jobs:
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
           GITHUB_TOKEN: ${{ secrets.GH_PACKAGE_REPO_READ_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           echo "Adding dummy env variables"
-          export GITHUB_USERNAME=GITHUB_USERNAME
-          export GITHUB_TOKEN=GITHUB_TOKEN
-          mvn -B verify -DskipTests
+          export USERNAME=USERNAME
+          export SENDER_ID=SENDER_ID
+          export PASSWORD=PASSWORD
+          export TEMPLATE_ID=TEMPLATE_ID
+          export SECURE_KEY=SECURE_KEY
+          mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Samagra-Development_CDAC-Service
