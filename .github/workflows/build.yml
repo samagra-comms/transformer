@@ -37,4 +37,4 @@ jobs:
           echo "Adding dummy env variables"
           export GITHUB_USERNAME=GITHUB_USERNAME
           export GITHUB_TOKEN=GITHUB_TOKEN
-          mvn -B verify  -DskipTests
+          mvn -s settings.xml -B verify  -DskipTests
