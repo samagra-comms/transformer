@@ -16,6 +16,21 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
+          servers: >
+            [
+              {
+                "id": "some-id",
+                "username": "${env.USER}",
+                "password": "${env.PASS}",
+                "configuration": {
+                  "httpConfiguration": {
+                    "all": {
+                      "usePreemptive": "true"
+                    }
+                  }
+                }
+              }
+            ]
       - name: Cache SonarCloud packages
         uses: actions/cache@v1
         with:
@@ -37,7 +52,5 @@ jobs:
           echo "Adding dummy env variables"
           export GITHUB_USERNAME=GITHUB_USERNAME
           export GITHUB_TOKEN=GITHUB_TOKEN
-          echo $YOUR_STRING | base64 -d > data.txt
-          echo "settings file content"
-          cat data.txt
+          cat $HOME/.m2/settings.xml
           mvn -s settings.xml -B verify -DskipTests
