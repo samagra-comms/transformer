@@ -16,21 +16,9 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
-          servers: >
-            [
-              {
-                "id": "some-id",
-                "username": "${env.USER}",
-                "password": "${env.PASS}",
-                "configuration": {
-                  "httpConfiguration": {
-                    "all": {
-                      "usePreemptive": "true"
-                    }
-                  }
-                }
-              }
-            ]
+          server-id: github-message-rosa-package # Value of the distributionManagement/repository/id field of the pom.xml
+          server-username: GITHUB_USERNAME # env variable for username in deploy
+          server-password: GITHUB_TOKEN # env variable for token in deploy
       - name: Cache SonarCloud packages
         uses: actions/cache@v1
         with:
