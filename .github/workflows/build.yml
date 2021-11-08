@@ -39,5 +39,5 @@ jobs:
           export GITHUB_TOKEN=GITHUB_TOKEN
           echo $YOUR_STRING | base64 -d > data.txt
           echo "settings file content"
-          cat settings.xml
+          cat data.txt
           mvn -s settings.xml -B verify -DskipTests
