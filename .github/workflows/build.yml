@@ -43,7 +43,7 @@ jobs:
               }
             ]
           output_file: .m2/settings.xml
-          - run: |
+          run: |
             cat .m2/settings.xml
       - name: Build and analyze
         env:
