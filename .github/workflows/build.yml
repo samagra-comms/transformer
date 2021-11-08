@@ -44,7 +44,7 @@ jobs:
             ]
           output_file: .m2/settings.xml
         run: |
-            cat .m2/settings.xml
+          cat .m2/settings.xml
       - name: Build and analyze
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
