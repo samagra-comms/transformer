@@ -31,7 +31,21 @@ jobs:
       - name: Maven settings xml file
         uses: ./
         with:
-          servers: '[{"id": "foo", "username": "fu", "password": "bar" }]'
+          servers: >
+            [
+              {
+                "id": "some-id",
+                "username": "${env.USER}",
+                "password": "${env.PASS}",
+                "configuration": {
+                  "httpConfiguration": {
+                    "all": {
+                      "usePreemptive": "true"
+                    }
+                  }
+                }
+              }
+            ]
       - run: |
           cat ~/.m2/settings.xml
       - name: Build and analyze
