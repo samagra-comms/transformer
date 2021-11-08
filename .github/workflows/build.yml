@@ -30,9 +30,21 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: maven-settings-xml-action
         uses: whelk-io/maven-settings-xml-action@v20
+        env:
+          GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
+          GITHUB_TOKEN: ${{ secrets.GH_PACKAGE_REPO_READ_TOKEN }}
         with:
-          path: ~/.m2
-          servers: '[{ "id": "github-message-rosa-package", "username": "${{ secrets.GH_PACKAGE_REPO_USERNAME }}", "password": "${{ secrets.GH_PACKAGE_REPO_READ_TOKEN }}" }]'
+          servers: >
+            [
+              {
+                "id": "github-message-rosa-package",
+                "username": "${env.GITHUB_USERNAME}",
+                "password": "${env.GITHUB_TOKEN}",
+              }
+            ]
+          output_file: .m2/settings.xml
+          - run: |
+            cat .m2/settings.xml
       - name: Build and analyze
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
@@ -42,4 +54,4 @@ jobs:
           echo "Adding dummy env variables"
           export GITHUB_USERNAME=GITHUB_USERNAME
           export GITHUB_TOKEN=GITHUB_TOKEN
-          mvn -s settings.xml -B verify  -DskipTests
+          mvn -s .m2/settings.xml -B verify  -DskipTests
