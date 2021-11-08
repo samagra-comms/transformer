@@ -31,6 +31,7 @@ jobs:
       - name: Set up Settings File
         uses: actions/setup-java@v2
         with: # running setup-java again overwrites the settings.xml
+          java-version: 11
           server-id: github-message-rosa-package # Value of the distributionManagement/repository/id field of the pom.xml
           server-username: GITHUB_USERNAME # env variable for username in deploy
           server-password: GITHUB_TOKEN # env variable for token in deploy
