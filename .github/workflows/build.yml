@@ -47,4 +47,4 @@ jobs:
           export GITHUB_TOKEN=GITHUB_TOKEN
           echo ".m2/settings/settings.xml"
           cat .m2/settings/settings.xml
-          mvn -s /home/runner/.m2/settings.xml -B verify -DskipTests
+          mvn -s .m2/settings/settings.xml -B verify -DskipTests
