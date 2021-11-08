@@ -40,6 +40,4 @@ jobs:
           export PASSWORD=PASSWORD
           export TEMPLATE_ID=TEMPLATE_ID
           export SECURE_KEY=SECURE_KEY
-          export GITHUB_TOKEN=GITHUB_TOKEN
-          export GITHUB_USERNAME=GITHUB_USERNAME
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Samagra-Development_CDAC-Service
