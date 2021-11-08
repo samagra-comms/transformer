@@ -35,6 +35,9 @@ jobs:
           server-id: github-message-rosa-package # Value of the distributionManagement/repository/id field of the pom.xml
           server-username: GITHUB_USERNAME # env variable for username in deploy
           server-password: GITHUB_TOKEN # env variable for token in deploy
+          server-id: github-utils-package # Value of the distributionManagement/repository/id field of the pom.xml
+          server-username: GITHUB_USERNAME # env variable for username in deploy
+          server-password: GITHUB_TOKEN # env variable for token in deploy
           settings-path: .m2/settings # location for the settings.xml file
       - name: Build and analyze
         env:
