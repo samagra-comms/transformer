@@ -35,6 +35,17 @@
 				<enabled>true</enabled>
 			</releases>
 		</repository>
+		<repository>
+			<id>github</id>
+			<name>Github Utils Package</name>
+			<url>https://maven.pkg.github.com/samagra-comms/utils</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</repository>
 	</repositories>
 
 	<dependencies>
