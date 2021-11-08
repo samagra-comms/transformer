@@ -28,6 +28,12 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
+      - name: Maven settings xml file
+        uses: ./
+        with:
+          servers: '[{"id": "foo", "username": "fu", "password": "bar" }]'
+      - run: |
+          cat ~/.m2/settings.xml
       - name: Build and analyze
         env:
           GITHUB_USERNAME: ${{ secrets.GH_PACKAGE_REPO_USERNAME }} 
@@ -39,4 +45,4 @@ jobs:
           export GITHUB_TOKEN=GITHUB_TOKEN
           echo "settings file content"
           cat settings.xml
-          mvn -B verify -DskipTests
+          mvn -s settings.xml -B verify -DskipTests
