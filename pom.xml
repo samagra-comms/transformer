@@ -25,7 +25,7 @@
 			<url>https://jcenter.bintray.com </url>
 		</repository>
 		<repository>
-			<id>github</id>
+			<id>github-message-rosa</id>
 			<name>Message Rosa</name>
 			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
 			<snapshots>
@@ -36,7 +36,7 @@
 			</releases>
 		</repository>
 		<repository>
-			<id>github</id>
+			<id>github-utils</id>
 			<name>Util</name>
 			<url>https://maven.pkg.github.com/samagra-comms/utils</url>
 			<snapshots>
