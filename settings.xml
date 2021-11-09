@@ -5,13 +5,13 @@
     <servers>
         <server>
             <id>github-message-rosa-package</id>
-            <username>${{env.GITHUB_ACTOR}}</username>
-            <password>${{env.GITHUB_TOKEN}}</password>
+            <username>surabhi-mahawar</username>
+            <password>${env.GITHUB_TOKEN}</password>
         </server>
         <server>
             <id>github-utils-package</id>
-            <username>${{env.GITHUB_ACTOR}}</username>
-            <password>${{env.GITHUB_TOKEN}}</password>
+            <username>surabhi-mahawar</username>
+            <password>${env.GITHUB_TOKEN}</password>
         </server>
     </servers>
 </settings>
