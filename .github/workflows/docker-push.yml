@@ -26,7 +26,7 @@ jobs:
             ${{ secrets.DOCKER_HUB_USERNAME }}/transformer
           # generate Docker tags based on the following events/attributes
           tags: |
-            type=semver,pattern={{version}}
+            type=semver,pattern=1.0.0
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v1
