@@ -2,8 +2,7 @@ name: Docker Push
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [main, master, gworkflow]
 
 jobs:
   build:
@@ -24,7 +23,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/cdac-service
+            ${{ secrets.DOCKER_HUB_USERNAME }}/transformer
           # generate Docker tags based on the following events/attributes
           tags: |
             type=semver,pattern={{version}}
