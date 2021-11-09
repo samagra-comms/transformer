@@ -1,5 +1,7 @@
 name: Test Build
 on:
+  push:
+    branches: [main, master, gworkflow]
   workflow_dispatch:
     inputs:
       name:
