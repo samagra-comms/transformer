@@ -49,4 +49,4 @@ jobs:
           cat .m2/settings/settings.xml
           echo "settings.xml"
           cat settings.xml
-          mvn -s settings.xml -B verify -DskipTests
+          mvn -B verify -DskipTests
