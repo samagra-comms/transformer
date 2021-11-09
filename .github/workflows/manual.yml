@@ -44,4 +44,6 @@ jobs:
           export PASSWORD=PASSWORD
           export TEMPLATE_ID=TEMPLATE_ID
           export SECURE_KEY=SECURE_KEY
+          echo "~/.m2/settings.xml"
+          cat ~/.m2/settings.xml
           mvn -B verify -DskipTests
