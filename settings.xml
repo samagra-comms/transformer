@@ -6,12 +6,12 @@
         <server>
             <id>github-message-rosa-package</id>
             <username>surabhi-mahawar</username>
-            <password>${env.GITHUB_TOKEN}</password>
+            <password>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</password>
         </server>
         <server>
             <id>github-utils-package</id>
             <username>surabhi-mahawar</username>
-            <password>${env.GITHUB_TOKEN}</password>
+            <password>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</password>
         </server>
     </servers>
 </settings>

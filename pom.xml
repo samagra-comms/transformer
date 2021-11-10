@@ -25,7 +25,7 @@
 			<url>https://jcenter.bintray.com </url>
 		</repository>
 		<repository>
-			<id>github</id>
+			<id>github-message-rosa-package</id>
 			<name>Github Message Rosa Package</name>
 			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
 			<snapshots>
@@ -152,7 +152,7 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>message-rosa</artifactId>
-			<version>1.1.0</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
