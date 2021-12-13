@@ -19,6 +19,9 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -118,6 +121,7 @@ public class AppConfiguration {
         configuration.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         configuration.put(ProducerConfig.CLIENT_ID_CONFIG, "sample-producer");
         configuration.put(ProducerConfig.ACKS_CONFIG, "all");
+        configuration.put(org.springframework.kafka.support.serializer.JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
         configuration.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
         configuration.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
         return configuration;
@@ -128,7 +132,7 @@ public class AppConfiguration {
         ReceiverOptions<String, String> options = ReceiverOptions.create(kafkaConsumerConfiguration());
         return options.subscription(Pattern.compile(inTopicName[0]))
                 .withKeyDeserializer(new JsonDeserializer<>())
-                .withValueDeserializer(new JsonDeserializer());
+                .withValueDeserializer(new JsonDeserializer(String.class));
     }
 
     @Bean
@@ -144,6 +148,18 @@ public class AppConfiguration {
     @Bean
     KafkaSender<Integer, String> reactiveKafkaSender(SenderOptions<Integer, String> kafkaSenderOptions) {
         return KafkaSender.create(kafkaSenderOptions);
+    }
+    
+    @Bean
+    ProducerFactory<String, String> producerFactory(){
+    	ProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory<>(kafkaProducerConfiguration());
+    	return producerFactory;
+    }
+    
+    @Bean
+    KafkaTemplate<String, String> kafkaTemplate() {
+    	KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory());
+    	return (KafkaTemplate<String, String>) kafkaTemplate;
     }
 
 //    @Bean
