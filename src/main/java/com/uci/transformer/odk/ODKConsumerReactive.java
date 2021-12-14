@@ -345,10 +345,12 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                             response[0].question
                                                     );
                                             childSpan4.end();
-
-                                            if (mm.isGlobal() && response[0].currentIndex.contains("eof__")) {
+                                            	
+                                            /* If form contains eof__, then process next bot by id addded with eof__bot_id, else process message */
+                                            if (response[0].currentIndex.contains("eof__")) {
                                             	Span childSpan5 = createChildSpan("getBotNameByBotID&getFirstFormByBotID", currentContext, parentSpan);
                                             	String nextBotID = mm.getNextBotID(response[0].currentIndex);
+                                            	log.info("Next bot id: "+nextBotID);
 
                                                 return Mono.zip(
                                                         campaignService.getBotNameByBotID(nextBotID),
@@ -370,8 +372,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         FormUpdation ss = FormUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
                                                         ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                                                                ss.getXML();
+//                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+//                                                                ss.getXML();
+                                                        String instanceXMlPrevious = ss.getXML();
                                                         log.debug("Instance value >> " + instanceXMlPrevious);
                                                         Span childSpan7 = createChildSpan("MenuManagerStartProcessForXMLNextForm", currentContext, parentSpan);
                                                         MenuManager mm2 = new MenuManager(null, null,
