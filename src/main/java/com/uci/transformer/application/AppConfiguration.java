@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
@@ -65,7 +66,7 @@ public class AppConfiguration {
     public String ODK_PASSWORD;
     
     @Autowired
-    public Cache<Object, Object> cache;
+    public CacheManager cacheManager;
 
     @Bean
     public FusionAuthClient getFAClient() {
@@ -79,7 +80,7 @@ public class AppConfiguration {
                 .baseUrl(CAMPAIGN_URL)
                 .defaultHeader("admin-token", CAMPAIGN_ADMIN_TOKEN)
                 .build();
-        return new CampaignService(webClient, getFAClient(), cache);
+        return new CampaignService(webClient, getFAClient(), cacheManager);
     }
 
     @Bean
