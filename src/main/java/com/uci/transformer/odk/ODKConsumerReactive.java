@@ -20,7 +20,17 @@ import com.uci.transformer.odk.repository.StateRepository;
 import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.telemetry.AssessmentTelemetryBuilder;
 import com.uci.utils.CampaignService;
+import com.uci.utils.kafka.RecordProducer;
 import com.uci.utils.kafka.SimpleProducer;
+import com.uci.utils.kafka.adapter.TextMapGetterAdapter;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.context.propagation.TextMapGetter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import messagerosa.core.model.ButtonChoice;
@@ -30,6 +40,8 @@ import messagerosa.core.model.XMessage;
 import messagerosa.core.model.XMessagePayload;
 import messagerosa.xml.XMessageParser;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.json.JSONArray;
@@ -57,6 +69,7 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -85,7 +98,10 @@ public class ODKConsumerReactive extends TransformerProvider {
     public String telemetryTopic;
 
     @Autowired
-    public SimpleProducer kafkaProducer;
+    public RecordProducer kafkaProducer;
+    
+    @Autowired
+    public SimpleProducer simpleKafkaProducer;
 
     @Autowired
     QuestionRepository questionRepo;
@@ -116,15 +132,21 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${assesment.character.go_to_start}")
     public String assesGoToStartChar;
 
+    @Autowired
+    public Tracer tracer;
+    
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
         reactiveKafkaReceiver
-                .doOnNext(new Consumer<ReceiverRecord<String, String>>() {
+                .doOnNext(new Consumer<ConsumerRecord<String, String>>() {
                     @Override
-                    public void accept(ReceiverRecord<String, String> stringMessage) {
+                    public void accept(ConsumerRecord<String, String> stringMessage) {
                         final long startTime = System.nanoTime();
-                        try {
-                            XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.value().getBytes()));
+                        Context extractedContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator().extract(Context.current(), stringMessage.headers(), TextMapGetterAdapter.getter);
+                        log.info("Opentelemetry extracted context : "+extractedContext);
+                        
+                		try (Scope scope = extractedContext.makeCurrent()) {
+                        	XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.value().getBytes()));
                             logTimeTaken(startTime, 1);
                             if (msg.getMessageType() == XMessage.MessageType.BROADCAST_TEXT) {
                                 transformToMany(msg).subscribe(new Consumer<List<XMessage>>() {
@@ -133,7 +155,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         messages = (ArrayList<XMessage>) messages;
                                         for (XMessage msg : messages) {
                                             try {
-                                                kafkaProducer.send(outboundTopic, msg.toXML());
+                                            	Span childSpan1 = createChildSpan("sendEventToKafka");
+                                            	kafkaProducer.send(outboundTopic, msg.toXML(), Context.current());
+                                            	childSpan1.end();
                                             } catch (JAXBException e) {
                                                 e.printStackTrace();
                                             }
@@ -141,17 +165,19 @@ public class ODKConsumerReactive extends TransformerProvider {
                                     }
                                 });
                             } else {
-                                transform(msg)
+                            	transform(msg)
                                         .subscribe(new Consumer<XMessage>() {
                                             @Override
                                             public void accept(XMessage transformedMessage) {
                                                 logTimeTaken(startTime, 2);
                                                 if (transformedMessage != null) {
                                                     try {
-                                                        kafkaProducer.send(outboundTopic, transformedMessage.toXML());
+                                                    	Span childSpan1 = createChildSpan("sendEventToKafka");
+                                                    	kafkaProducer.send(outboundTopic, transformedMessage.toXML(), Context.current());
                                                         long endTime = System.nanoTime();
                                                         long duration = (endTime - startTime);
                                                         log.error("Total time spent in processing form: " + duration / 1000000);
+                                                        childSpan1.end();
                                                     } catch (JAXBException e) {
                                                         e.printStackTrace();
                                                     }
@@ -161,7 +187,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             }
                         } catch (JAXBException e) {
                             e.printStackTrace();
-                        } catch (Exception e) {
+                        } catch (Throwable e) {
                             e.printStackTrace();
                         }
                     }
@@ -247,12 +273,15 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Override
     public Mono<XMessage> transform(XMessage xMessage) throws Exception {
     	XMessage[] finalXMsg = new XMessage[1];
-        return campaignService
+    	Span childSpan1 = createChildSpan("getCampaignFromNameTransformer");
+    	return campaignService
                 .getCampaignFromNameTransformer(xMessage.getApp())
                 .map(new Function<JsonNode, Mono<Mono<Mono<XMessage>>>>() {
                     @Override
                     public Mono<Mono<Mono<XMessage>>> apply(JsonNode campaign) {
-                        if (campaign != null) {
+                    	childSpan1.end();
+                    	if (campaign != null) {
+                    		Span childSpan2 = createChildSpan("getFormID");
 //                        	Map<String, String> data = getCampaignAndFormIdFromXMessage(xMessage);
 //                        	
 //                            String formID = data.get("formID");
@@ -277,18 +306,22 @@ public class ODKConsumerReactive extends TransformerProvider {
                             switchFromTo(xMessage);
                             
                             Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
-
+                            
+                            childSpan2.end();
                             // Get details of user from database
+                            Span childSpan3 = createChildSpan("getPreviousMetadata");
                             return getPreviousMetadata(xMessage, formID)
                                     .map(new Function<FormManagerParams, Mono<Mono<XMessage>>>() {
                                         @Override
                                         public Mono<Mono<XMessage>> apply(FormManagerParams previousMeta) {
-                                            final ServiceResponse[] response = new ServiceResponse[1];
+                                        	childSpan3.end();
+                                        	final ServiceResponse[] response = new ServiceResponse[1];
                                             MenuManager mm;
                                             if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
 //                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
-                                                ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo).start();
+                                            	Span childSpan4 = createChildSpan("MenuManager-construct");
+                                            	ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo).start();
                                                 FormUpdation ss = FormUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
@@ -296,15 +329,24 @@ public class ODKConsumerReactive extends TransformerProvider {
 //                                                        ss.getXML();
                                                 String instanceXMlPrevious = ss.getXML();
                                                 log.debug("Instance value >> " + instanceXMlPrevious);
+                                                
                                                 mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo);
+                                                childSpan4.end();
+                                                Span childSpan5 = createChildSpan("MenuManager-startProcess");
                                                 response[0] = mm.start();
+                                                childSpan5.end();
                                             } else {
-                                                mm = new MenuManager(previousMeta.previousPath, previousMeta.currentAnswer,
+                                            	Span childSpan4 = createChildSpan("MenuManager-construct");
+                                            	mm = new MenuManager(previousMeta.previousPath, previousMeta.currentAnswer,
                                                         previousMeta.instanceXMlPrevious, formPath, formID, false, questionRepo);
-                                                response[0] = mm.start();
+                                            	childSpan4.end();
+                                            	Span childSpan5 = createChildSpan("MenuManager-startProcess");
+                                            	response[0] = mm.start();
+                                            	childSpan5.end();
                                             }
                                             
                                             
+                                            Span childSpan6 = createChildSpan("updateQuestionAndAssessment");
                                             // Save answerData => PreviousQuestion + CurrentAnswer
                                             Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment =
                                                     updateQuestionAndAssessment(
@@ -318,8 +360,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                             xMessage,
                                                             response[0].question
                                                     );
-
-
+                                            childSpan6.end();
+                                            
                                             /* If form contains eof__, then process next bot by id addded with eof__bot_id, else process message */
                                             if (response[0].currentIndex.contains("eof__")) {    
                                             	String nextBotID = mm.getNextBotID(response[0].currentIndex);
@@ -330,7 +372,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 ).map(new Function<Tuple2<String, String>, Mono<XMessage>>() {
                                                     @Override
                                                     public Mono<XMessage> apply(Tuple2<String, String> objects) {
-                                                        String nextFormID = objects.getT2();
+                                                    	String nextFormID = objects.getT2();
                                                         String nextAppName = objects.getT1();
 
                                                         ServiceResponse serviceResponse = new MenuManager(
@@ -338,7 +380,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                                 getFormPath(nextFormID), nextFormID,
                                                                 false, questionRepo)
                                                                 .start();
-                                                        FormUpdation ss = FormUpdation.builder().build();
+                                                    	FormUpdation ss = FormUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
                                                         ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
 //                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
@@ -350,11 +392,15 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                                 questionRepo);
                                                         ServiceResponse response = mm2.start();
                                                         xMessage.setApp(nextAppName);
-                                                        return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
+                                                        Mono<XMessage> decodedXMsg = decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
+                                                        return decodedXMsg;
                                                     }
                                                 });
                                             } else {
-                                                return Mono.just(decodeXMessage(xMessage, response[0], formID, updateQuestionAndAssessment));
+                                            	Span childSpan7 = createChildSpan("decodeXMessage");
+                                            	Mono<XMessage> decodedXMsg = decodeXMessage(xMessage, response[0], formID, updateQuestionAndAssessment);
+                                            	childSpan7.end();
+                                            	return Mono.just(decodedXMsg);
                                             }
                                         }
                                     });
@@ -526,22 +572,28 @@ public class ODKConsumerReactive extends TransformerProvider {
                     @Override
                     public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
                         if (existingQuestionStatus.getLeft()) {
-                            saveAssessmentData(
+                        	Span childSpan1 = createChildSpan("saveAssessmentData");
+                        	saveAssessmentData(
                                     existingQuestionStatus, formID, previousMeta, campaign, xMessage, null).subscribe(new Consumer<Assessment>() {
                                 @Override
                                 public void accept(Assessment assessment) {
+                                	childSpan1.end();
                                     log.info("Assessment Saved Successfully {}", assessment.getId());
                                 }
                             });
                         } else {
+                        	Span childSpan1 = createChildSpan("saveQuestion");
                             saveQuestion(question).subscribe(new Consumer<Question>() {
                                 @Override
                                 public void accept(Question question) {
+                                	childSpan1.end();
                                     log.info("Question Saved Successfully");
-                                    saveAssessmentData(
+                                    Span childSpan2 = createChildSpan("saveAssessmentData");
+                                	saveAssessmentData(
                                             existingQuestionStatus, formID, previousMeta, campaign, xMessage, question).subscribe(new Consumer<Assessment>() {
                                         @Override
                                         public void accept(Assessment assessment) {
+                                        	childSpan2.end();
                                             log.info("Assessment Saved Successfully {}", assessment.getId());
                                         }
                                     });
@@ -605,7 +657,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             assessment.getQuestion(),
                             assessment,
                             0);
-            kafkaProducer.send(telemetryTopic, telemetryEvent);
+            simpleKafkaProducer.send(telemetryTopic, telemetryEvent);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -626,7 +678,9 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     private Mono<XMessage> decodeXMessage(XMessage xMessage, ServiceResponse response, String formID, Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment) {
-        XMessage nextMessage = getMessageFromResponse(xMessage, response);
+        Span childSpan1 = createChildSpan("getMessageFromResponse");
+    	XMessage nextMessage = getMessageFromResponse(xMessage, response);
+    	childSpan1.end();
         if (isEndOfForm(response)) {
             return Mono.zip(
                     appendNewResponse(formID, xMessage, response),
@@ -734,4 +788,58 @@ public class ODKConsumerReactive extends TransformerProvider {
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
     }
+    
+    /**
+	 * Create Child Span with current context & parent span
+	 * @param spanName
+	 * @param context
+	 * @param parentSpan
+	 * @return childSpan
+	 */
+	private Span createChildSpan(String spanName, Context context, Span parentSpan) {
+		String prefix = "transformer-";
+		return tracer.spanBuilder(prefix + spanName).setParent(context.with(parentSpan)).startSpan();
+	}
+	
+	/**
+	 * Create Child Span
+	 * @param spanName
+	 * @return childSpan
+	 */
+	private Span createChildSpan(String spanName) {
+		String prefix = "transformerSpan-";
+		return tracer.spanBuilder(prefix + spanName).startSpan();
+	}
+	
+	/**
+	 * Log Exceptions & if span exists, add error to span
+	 * @param eMsg
+	 * @param span
+	 */
+	private void genericException(String eMsg, Span span) {
+		eMsg = "Exception: " + eMsg;
+		log.error(eMsg);
+		if(span != null) {
+			span.setStatus(StatusCode.ERROR, "Exception: " + eMsg);
+			span.end();
+		}
+	}
+
+	/**
+	 * Log Exception & if span exists, add error to span 
+	 * @param s
+	 * @param span
+	 * @return
+	 */
+	private Consumer<Throwable> genericError(String s, Span span) {
+		return c -> {
+			String msg = "Error in " + s + "::" + c.getMessage();
+			log.error(msg);
+			if (span != null) {
+				log.info("generic message - span");
+				span.setStatus(StatusCode.ERROR, msg);
+				span.end();
+			}
+		};
+	}
 }
