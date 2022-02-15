@@ -713,7 +713,7 @@ public class MenuManager {
                     choices = getChoices(choices);
                     
                     //Check this
-                    return XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).stylingTag(stylingTag).build();
+                    return XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build();
                 } catch (Exception e) {
                     log.info("Non Question data type");
                     formController.stepToNextEvent();
