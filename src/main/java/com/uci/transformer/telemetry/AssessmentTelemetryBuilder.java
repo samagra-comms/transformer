@@ -37,7 +37,7 @@ public class AssessmentTelemetryBuilder {
 	// Survey/Questionnaire"
 
 	public String build(String botOrg, String channel, String provider, String producerID, String conversationOwnerID,
-			Question question, Assessment assessment, XMessagePayload questionPayload, long duration) {
+			Question question, Assessment assessment, XMessagePayload questionPayload, long duration, String encyptedDeviceId) {
 //		ArrayList<ButtonChoice> buttonChoices = getQuestionChoices(questionPayload.getButtonChoices());
 		ArrayList<ButtonChoice> buttonChoices = questionPayload.getButtonChoices();
 		String questionType = getQuestionType(buttonChoices);
@@ -74,7 +74,7 @@ public class AssessmentTelemetryBuilder {
 												.pid(producerID)
 												.ver(QUESTION_TELEMETRY_IMPL_VERSION)
 												.build())
-								.did(userID)
+								.did(encyptedDeviceId)
 								.sid("")
 								.cdata(cdata)
 								.rollup(rollup)
