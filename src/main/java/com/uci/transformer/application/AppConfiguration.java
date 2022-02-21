@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.uci.utils.CampaignService;
 import com.uci.utils.kafka.ReactiveProducer;
 import io.fusionauth.client.FusionAuthClient;
+
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -83,6 +84,11 @@ public class AppConfiguration {
     @Autowired
     public Cache<Object, Object> cache;
 
+    @Value("${spring.kafka.bootstrap-servers}")
+    private String BOOTSTRAP_SERVERS;
+
+    private final String GROUP_ID = "transformer";
+
     @Bean
     public FusionAuthClient getFAClient() {
         return new FusionAuthClient(FUSIONAUTH_KEY, FUSIONAUTH_URL);
@@ -116,11 +122,6 @@ public class AppConfiguration {
                 .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(httpClient))
                 .build();
     }
-
-    @Value("${spring.kafka.bootstrap-servers}")
-    private String BOOTSTRAP_SERVERS;
-
-    private final String GROUP_ID = "transformer";
 
     @Bean
     Map<String, Object> kafkaConsumerConfiguration() {

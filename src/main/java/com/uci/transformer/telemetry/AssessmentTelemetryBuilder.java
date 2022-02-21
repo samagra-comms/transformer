@@ -74,7 +74,7 @@ public class AssessmentTelemetryBuilder {
 												.pid(producerID)
 												.ver(QUESTION_TELEMETRY_IMPL_VERSION)
 												.build())
-								.did(encyptedDeviceId)
+								.did(userID)
 								.sid("")
 								.cdata(cdata)
 								.rollup(rollup)
