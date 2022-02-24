@@ -397,8 +397,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 response[0] = mm.start();
                                             }
                                             
+                                            log.info("next question xpath:" + response[0].question.getXPath());
+                                            
                                             /* To use with previous question & question payload methods */
-                                            log.info("menu manager instanceXMlPrevious: "+instanceXMlPrevious);
+//                                            log.info("menu manager instanceXMlPrevious: "+instanceXMlPrevious);
                                             menuManager = mm;
                                             
                                             /* Previous Question Data */
@@ -785,19 +787,23 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
     
     private Flux<XMessageDAO> getLatestXMessage(String appName, String userID) {
-    	hashOperations = redisTemplate.opsForHash();
-        XMessageDAO xMessageDAO = (XMessageDAO)hashOperations.get(redisKeyWithPrefix("XMessageDAO"), redisKeyWithPrefix(userID));
-	  	if(xMessageDAO != null) {
-	  		log.info("redis key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
-	  		log.info("Redis xMsgDao id: "+xMessageDAO.getId()+", dao app: "+xMessageDAO.getApp()
-			+", From id: "+xMessageDAO.getFromId()+", user id: "+xMessageDAO.getUserId()
-			+", xMessage: "+xMessageDAO.getXMessage()+", status: "+xMessageDAO.getMessageState()+
-			", timestamp: "+xMessageDAO.getTimestamp());
-	  		return Flux.just(xMessageDAO);
-	  	} else {
-	  		log.info("not found in redis for key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
-	  	}
-	  	
+    	try {
+    		hashOperations = redisTemplate.opsForHash();
+            XMessageDAO xMessageDAO = (XMessageDAO)hashOperations.get(redisKeyWithPrefix("XMessageDAO"), redisKeyWithPrefix(userID));
+    	  	if(xMessageDAO != null) {
+    	  		log.info("redis key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
+    	  		log.info("Redis xMsgDao id: "+xMessageDAO.getId()+", dao app: "+xMessageDAO.getApp()
+    			+", From id: "+xMessageDAO.getFromId()+", user id: "+xMessageDAO.getUserId()
+    			+", xMessage: "+xMessageDAO.getXMessage()+", status: "+xMessageDAO.getMessageState()+
+    			", timestamp: "+xMessageDAO.getTimestamp());
+    	  		return Flux.just(xMessageDAO);
+    	  	} else {
+    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
+    	  	}
+    	} catch (Exception e) {
+    		log.error("Exception in redis data fetch: "+e.getMessage());   	
+    	}
+    	
     	return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
     }
 

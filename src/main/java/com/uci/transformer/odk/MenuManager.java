@@ -201,12 +201,12 @@ public class MenuManager {
         SaveStatus saveStatus = new SaveStatus();
         
         if(xpath == null) {
-        	formController.setLanguage("English (en)");
+        	setFormLanguage("English (en)");
         	log.info("1 Selected language: "+formController.getModel().getLanguage());
         }
         
         if(xpath != null && xpath.equals("question./data/intro_group[1]/opt_language[1]")) {
-        	formController.setLanguage(answer);
+        	setFormLanguage(answer);
         	log.info("2 Selected language: "+formController.getModel().getLanguage());
         	
         	formController.stepToNextEvent();
@@ -361,7 +361,7 @@ public class MenuManager {
 
         question.setMeta(Json.of(new Meta(nextQuestion.getText(), choices).toString()));
 
-	log.info("udpatedInstanceXML: "+udpatedInstanceXML);
+        log.info("udpatedInstanceXML: "+udpatedInstanceXML);
 
         FormIndex formIndex = formController.getModel().getFormIndex();
         ArrayList<Integer> conversationLevel = new ArrayList();
@@ -373,17 +373,29 @@ public class MenuManager {
 			conversationLevel.add(nextIndex);
 		}
         
-	return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
+		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
     }
     
-    private void setFormLanguage() {
+    private void setFormLanguage(String lang) {
+//    	formController.setLanguage(lang);
+    	String langArr[] = lang.split(" ");
+    	try {
+    		if(langArr[0] != null && !langArr[0].isEmpty()) {
+    			Integer n = Integer.parseInt(langArr[0]);
+    			langArr = Arrays.copyOfRange(langArr, 1, langArr.length);
+    		}
+    	} catch (NumberFormatException ex) {
+    		log.info("Language text does not contain a number");
+    	}
+    	lang = String.join(" ", langArr);
+    	
     	final String[] languages = formController.getModel().getLanguages();
-        int selected = -1;
         if (languages != null) {
-            String language = formController.getModel().getLanguage();
             for (int i = 0; i < languages.length; i++) {
-                if (language.equals(languages[i])) {
-                    selected = i;
+            	log.info("A lang "+i+": "+languages[i]);
+                if (lang.equals(languages[i])) {
+                    formController.setLanguage(lang);
+                    break;
                 }
             }
         }
@@ -481,7 +493,7 @@ public class MenuManager {
                     boolean found = false;
                     if (items != null) {
                         for (int i = 0; i < items.size(); i++) {
-                            if (value.equals(items.get(i).getLabelInnerText()) ||
+                            if (value.equals(getLocaleChoiceText(items.get(i))) ||
                                     checkForSpaceInOptions(value, items, i) ||
                                     checkForDotInOptions(value, items, i) ||
                                     this.isSpecialResponse
@@ -490,19 +502,22 @@ public class MenuManager {
                                 IAnswerData answerData;
                                 if (!this.isSpecialResponse) answerData = new StringData(items.get(i).getValue());
                                 else answerData = new StringData(value);
+                                log.info("answerData 1: "+answerData);
                                 saveStatus = formController.answerQuestion(formIndex, answerData, true);
                                 break;
                             }
                         }
                         if (!found) { //Checking for labels with indexes as part of the text only
                             for (int i = 0; i < items.size(); i++) {
-                                if (value.equals(items.get(i).getLabelInnerText().split(" ")[0]) ||
-                                        value.equals(items.get(i).getLabelInnerText().split(". ")[0])
+                            	String label = getLocaleChoiceText(items.get(i));
+                            	if (value.equals(label.split(" ")[0]) ||
+                                        value.equals(label.split(". ")[0])
                                 ) {
                                     found = true;
                                     IAnswerData answerData;
                                     if (!this.isSpecialResponse) answerData = new StringData(items.get(i).getValue());
                                     else answerData = new StringData(value);
+                                    log.info("answerData 1: "+answerData);
                                     saveStatus = formController.answerQuestion(formIndex, answerData, true);
                                     break;
                                 }
@@ -544,7 +559,7 @@ public class MenuManager {
     private boolean checkForSpaceInOptions(String value, List<SelectChoice> items, int i) {
         // Example 1 Option1
         try {
-            return value.equals(items.get(i).getLabelInnerText().split(" ")[0]);
+            return value.equals(getLocaleChoiceText(items.get(i)).split(" ")[0]);
         } catch (Exception e) {
             return false;
         }
@@ -553,7 +568,7 @@ public class MenuManager {
     private boolean checkForDotInOptions(String value, List<SelectChoice> items, int i) {
         // Example 1.
         try {
-            return value.equals(items.get(i).getLabelInnerText().split(" ")[0].split(".")[0]);
+            return value.equals(getLocaleChoiceText(items.get(i)).split(" ")[0].split(".")[0]);
         } catch (Exception e) {
             return false;
         }
@@ -831,13 +846,7 @@ public class MenuManager {
                     if (items != null) {
                     	for (int i = 0; i < items.size(); i++) {
                             //Check
-                    		log.info("islocalizable: "+items.get(i).isLocalizable());
-                    		SelectChoice item = items.get(i);
-                    		item.setLocalizable(true);
-                    		
-                    		log.info("choice value: "+items.get(i).getValue());
-                    		log.info("choice label text: "+items.get(i).getLabelInnerText());
-                            buttonChoices.add(ButtonChoice.builder().key(items.get(i).getValue()).text(items.get(i).getLabelInnerText()).build());
+                            buttonChoices.add(ButtonChoice.builder().key(items.get(i).getValue()).text(getLocaleChoiceText(items.get(i))).build());
                         }
                     }
             }
@@ -1070,5 +1079,26 @@ public class MenuManager {
     	}
     	
     	return payload;
+    }
+    
+    /**
+     * Get Choice Label text as per current locale
+     * @param item
+     * @return
+     */
+    private String getLocaleChoiceText(SelectChoice item) {
+    	String locale = "";
+    	if(formController.getModel().getLanguage() != null 
+				&& !formController.getModel().getLanguage().isEmpty()) {
+    		locale = formController.getModel().getForm().getLocalizer().getLocale();
+    			
+    	}
+    	String label = item.getLabelInnerText();
+		if(!locale.isEmpty()) {
+			label = formController.getModel().getForm().getLocalizer().getLocaleData(locale).get(item.getTextID());
+			log.info("Label: "+label+", textid: "+item.getTextID());
+		}
+		log.info("Label final: "+label);
+		return label;
     }
 }
