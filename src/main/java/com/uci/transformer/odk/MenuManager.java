@@ -194,12 +194,31 @@ public class MenuManager {
         
         FECWrapper fecWrapper = loadForm(formPath, xpath); // If instance load from instance (If form is filled load new)
         formController = fecWrapper.controller;
+        
         String currentPath = "";
         String udpatedInstanceXML = "";
         XMessagePayload nextQuestion;
         SaveStatus saveStatus = new SaveStatus();
         
-        if (answer != null && answer.equals(assesOneLevelUpChar)) {
+        if(xpath == null) {
+        	formController.setLanguage("English (en)");
+        	log.info("1 Selected language: "+formController.getModel().getLanguage());
+        }
+        
+        if(xpath != null && xpath.equals("question./data/intro_group[1]/opt_language[1]")) {
+        	formController.setLanguage(answer);
+        	log.info("2 Selected language: "+formController.getModel().getLanguage());
+        	
+        	formController.stepToNextEvent();
+        	try {
+                udpatedInstanceXML = getCurrentInstance();
+            } catch (IOException e) {
+            	e.printStackTrace();
+            }
+
+            nextQuestion = createView(formController.getModel().getEvent(), "");
+            currentPath = getXPath(formController, formController.getModel().getFormIndex());
+        } else if (answer != null && answer.equals(assesOneLevelUpChar)) {
         	/* for level one up character, if last message xpath contains eof, restart the bot */
             if(xpath.contains("eof")) {
                  xpath = null;
@@ -355,6 +374,19 @@ public class MenuManager {
 		}
         
 	return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
+    }
+    
+    private void setFormLanguage() {
+    	final String[] languages = formController.getModel().getLanguages();
+        int selected = -1;
+        if (languages != null) {
+            String language = formController.getModel().getLanguage();
+            for (int i = 0; i < languages.length; i++) {
+                if (language.equals(languages[i])) {
+                    selected = i;
+                }
+            }
+        }
     }
     
     /**
@@ -743,22 +775,22 @@ public class MenuManager {
                 // Check for rendered Types
                 ArrayList<ButtonChoice> choices = new ArrayList<>();
                 try {
-                    if (formController.getModel().getEvent() == FormEntryController.EVENT_REPEAT) {
+                	if (formController.getModel().getEvent() == FormEntryController.EVENT_REPEAT) {
                     	// formController.stepToNextEvent();
-                        return createView(formController.stepToNextEvent(), previousPrompt);
+                    	return createView(formController.stepToNextEvent(), previousPrompt);
                     }
                     if (formController.getModel().getEvent() == FormEntryController.EVENT_GROUP) {
-                        formController.stepToNextEvent();
+                    	formController.stepToNextEvent();
                     }
                     // Check for note and add
                     if (isIntro() && !isQuestionChoiceType(formController)) {
-                        previousPrompt = renderQuestion(formController);
+                    	previousPrompt = renderQuestion(formController);
                         log.info("found previousPrompt: "+previousPrompt);
                         return createView(formController.stepToNextEvent(), previousPrompt);
                     }
                     
                 	choices = getChoices(choices);
-                    
+
                     //Check this
                     return getPayloadWithBindTags(
                     		XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build(), 
@@ -791,19 +823,26 @@ public class MenuManager {
     }
 
     private ArrayList<ButtonChoice> getChoices(ArrayList<ButtonChoice> choices) {
-        ArrayList<ButtonChoice> buttonChoices = new ArrayList<>();
+    	ArrayList<ButtonChoice> buttonChoices = new ArrayList<>();
         try {
-            switch (formController.getModel().getQuestionPrompt().getControlType()) {
+        	switch (formController.getModel().getQuestionPrompt().getControlType()) {
                 case Constants.CONTROL_SELECT_ONE:
-                    List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
+                	List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     if (items != null) {
-                        for (int i = 0; i < items.size(); i++) {
+                    	for (int i = 0; i < items.size(); i++) {
                             //Check
+                    		log.info("islocalizable: "+items.get(i).isLocalizable());
+                    		SelectChoice item = items.get(i);
+                    		item.setLocalizable(true);
+                    		
+                    		log.info("choice value: "+items.get(i).getValue());
+                    		log.info("choice label text: "+items.get(i).getLabelInnerText());
                             buttonChoices.add(ButtonChoice.builder().key(items.get(i).getValue()).text(items.get(i).getLabelInnerText()).build());
                         }
                     }
             }
         } catch (Exception e) {
+        	log.info("Exception in get choices: "+e.getMessage());
         }
         return getQuestionsChoiceWithKey(buttonChoices);
     }
@@ -814,30 +853,38 @@ public class MenuManager {
 	 * @return
 	 */
 	private ArrayList<ButtonChoice> getQuestionsChoiceWithKey(ArrayList<ButtonChoice> questionChoices) {
-		questionChoices.forEach(choice -> {
-			String[] a = choice.getText().split(" ");
+		if(questionChoices != null) {
 			try {
-				if(a[0] != null && !a[0].isEmpty()) {
-					Integer.parseInt(a[0]);
-			        choice.setKey(a[0].toString());
-	    		}
-			} catch (NumberFormatException ex) {
-				String[] b = choice.getText().split(".");
-	    		try {
-	    			if(b[0] != null && !b[0].isEmpty()) {
-		    		    Integer.parseInt(b[0]);
-		    		    choice.setKey(b[0].toString());
-	    			}
-	    		} catch (NumberFormatException exc) {
-	    			// do nothing
-	    		} catch (ArrayIndexOutOfBoundsException exc) {
-	    		    // do nothing
-	    		}
-			} catch (ArrayIndexOutOfBoundsException ex) {
-				// do nothing
+				questionChoices.forEach(choice -> {
+					try {
+						String[] a = choice.getText().split(" ");
+						if(a[0] != null && !a[0].isEmpty()) {
+							Integer.parseInt(a[0]);
+					        choice.setKey(a[0].toString());
+			    		}
+					} catch (NumberFormatException ex) {
+						String[] b = choice.getText().split(".");
+			    		try {
+			    			if(b[0] != null && !b[0].isEmpty()) {
+				    		    Integer.parseInt(b[0]);
+				    		    choice.setKey(b[0].toString());
+			    			}
+			    		} catch (NumberFormatException exc) {
+			    			// do nothing
+			    		} catch (ArrayIndexOutOfBoundsException exc) {
+			    			// do nothing
+			    		}
+					} catch (ArrayIndexOutOfBoundsException ex) {
+						// do nothing
+					} catch (Exception ex) {
+						log.info("Exception in getQuestionsChoiceWithKey-2: "+ex.getMessage());
+					}
+				});
+			} catch (Exception e) {
+				log.info("Exception in getQuestionsChoiceWithKey: "+e.getMessage());
 			}
 			
-		});
+		}
 		return questionChoices;
 	}
 
