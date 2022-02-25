@@ -944,16 +944,22 @@ public class MenuManager {
                 try{
                     ArrayList<Item> options = new ArrayList<>();
                     JSONArray matchedVacancies = this.user.getJSONArray("matched");
+                    log.info("matchedVacancies count: "+matchedVacancies.length());
                     if(matchedVacancies.length() > 0){
                         for(int i=0; i<matchedVacancies.length(); i++){
                             String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
                                     " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
                             String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
+                            log.info("vacancy label: "+label+", value: "+value);
                             options.add(Item.builder().label(label).value(value).build());
                         }
                         ss.addSelectOneOptions(options, "vacancies");
                     }
-                }catch(Exception e) {}
+//                    log.info("Form XML :" +ss.getXML());
+                } catch(Exception e) {
+                	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
+                	e.printStackTrace();
+                }
                 fis = ss.getInputStream();
             }else{
                 fis = new FileInputStream(formXml);
@@ -1094,9 +1100,10 @@ public class MenuManager {
     			
     	}
     	String label = item.getLabelInnerText();
-		if(!locale.isEmpty()) {
+    	log.info("Label first: "+label);
+		if(!locale.isEmpty() && item.getTextID() != null && !item.getTextID().isEmpty()) {
 			label = formController.getModel().getForm().getLocalizer().getLocaleData(locale).get(item.getTextID());
-			log.info("Label: "+label+", textid: "+item.getTextID());
+			log.info("Label: "+label+", textid: "+item.getTextID()+", value: "+item.getValue());
 		}
 		log.info("Label final: "+label);
 		return label;
