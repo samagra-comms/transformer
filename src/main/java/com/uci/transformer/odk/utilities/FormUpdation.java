@@ -71,15 +71,17 @@ public class FormUpdation {
         NodeList translations = this.instanceData.getElementsByTagName("translation");
         
         ArrayList rArr = new ArrayList();
+        Node langClone = null;
+        String dummyID = null;
+        
         for(int i=0; i< e.getLength(); i++){
             if(e.item(i).getAttributes().getNamedItem("ref").getChildNodes().item(0).toString().contains(key)){
         		found = true;
                 selectElement = e.item(i);
-                log.info("Select element: "+selectElement);
-                for (Item item: options){
-                	log.info("IN-3");
+                Node itemNodeClone = selectElement.getFirstChild().getNextSibling().cloneNode(true);
+                for (int a = 0; a < options.size(); a++){
+                	Item item = options.get(a);
                 	String label = item.value + " " + item.label;
-                    Node itemNodeClone = selectElement.getFirstChild().getNextSibling().cloneNode(true);
                     if(itemNodeClone.getChildNodes().item(0).getFirstChild() == null) {
                     	itemNodeClone.getChildNodes().item(0).appendChild(this.instanceData.createTextNode(label));
                     } else {
@@ -91,58 +93,60 @@ public class FormUpdation {
                     	itemNodeClone.getChildNodes().item(1).getFirstChild().setNodeValue(item.value);
                     }
                     
-                    selectElement.appendChild(itemNodeClone);
-                    
                     try {
-                    	String refValue = itemNodeClone.getChildNodes().item(0).getAttributes().getNamedItem("ref").getChildNodes().item(0).getNodeValue();
-                        refValue = refValue.replace("jr:itext('", "");
-                        refValue = refValue.replace("')", "");
-                        log.info("refValue: "+refValue);
-                        
-                        log.info("translations.getLength(): "+translations.getLength());
-                        for(int j =0; j < translations.getLength();j++) {
-                    		NodeList childs = translations.item(j).getChildNodes();
-                    		log.info("childs.getLength(): "+childs.getLength());
-                    		for(int k =0; k < childs.getLength();k++) {
-                    			if(childs.item(k).getAttributes().getNamedItem("id") != null
-                    				&& childs.item(k).getAttributes().getNamedItem("id").getChildNodes().item(0).getNodeValue().equals(refValue)) {
-                    				Node clone = childs.item(k).cloneNode(true);
-//                    				log.info("child value: "+childs.item(k).getFirstChild().getFirstChild().getNodeValue());
-                    					
-                    				clone.getFirstChild().getFirstChild().setNodeValue(label);
-//                    				log.info("child value: "+clone.getFirstChild().getFirstChild().getNodeValue());
-                    					
-                    				translations.item(j).appendChild(clone);
-                    				
-                    				translations.item(j).removeChild(childs.item(k));
-                    				
-                    				rArr.add(k);
-                    				break;
-                    			}
+                    	if(translations.getLength() > 0) {
+                    		/* Set Dummy ID if empty */
+                    		if(dummyID == null || dummyID.isEmpty()) {
+                    			dummyID = itemNodeClone.getChildNodes().item(0).getAttributes().getNamedItem("ref").getChildNodes().item(0).getNodeValue();
+    	                    	dummyID = dummyID.replace("jr:itext('", "").replace("')", "");	
                     		}
-                    	}
+                    		
+                    		/* Create New ID for translation choices & Ref for select choice*/
+	                        String newID = dummyID;
+	                        newID = newID.replace(":label", "")+item.value+":label";
+	                        
+	                        String newRefV = "jr:itext('"+newID+"')";
+	                        log.info("dummyID: "+dummyID+", newID: "+newID+" ,newRefV: "+newRefV);
+	                        
+	                        /* Get translation clone of dummy select choice and remove them from xml
+	                         * Append translation clone with new id */
+	                        for(int j =0; j < translations.getLength();j++) {
+	                        	log.info("Language: "+translations.item(j).getAttributes().getNamedItem("lang").getChildNodes().item(0).getNodeValue());
+                            	
+	                        	NodeList childs = translations.item(j).getChildNodes();
+		                    	/* Loop child nodes to find dummy element for clone & removal */
+	                        	for(int k =0; k < childs.getLength();k++) {
+		                    			/* Find the child with ref value from the last item */
+		                    		if(childs.item(k).getAttributes().getNamedItem("id") != null
+		                    				&& childs.item(k).getAttributes().getNamedItem("id").getChildNodes().item(0).getNodeValue().equals(dummyID)) {
+//		                    			/* Set language clone */
+		                    			if(langClone == null) {
+		                    				langClone = childs.item(k).cloneNode(true);
+		                    			}
+		                    			/* Delete child with dummy id */
+		                    			log.info("Deleting child with id: "+dummyID);
+		                    			translations.item(j).removeChild(childs.item(k));
+		                    		}
+		                    	}
+	                    		
+	                    		Node clone = langClone;
+	                    		clone.getFirstChild().getFirstChild().setNodeValue(label);
+                            	clone.getAttributes().getNamedItem("id").getChildNodes().item(0).setNodeValue(newID);
+                            	log.info("langClone label: "+label+", newID: "+newID);
+                            	translations.item(j).appendChild(clone);
+	                        }
+	                        
+	                        itemNodeClone.getChildNodes().item(0).getAttributes().getNamedItem("ref").getChildNodes().item(0).setNodeValue(newRefV);
+                        }
                     } catch (Exception ex) {
                     	log.info("Language translation append exception: "+ex.getMessage());
                     }
+                    
+                    selectElement.appendChild(itemNodeClone);
                 }
                 
                 // Delete the dummy one.
                 selectElement.removeChild(selectElement.getFirstChild().getNextSibling());
-                
-//                try {
-//                	log.info("translations.getLength(): "+translations.getLength());
-//                	for(int x = 0; x < translations.getLength(); x++) {
-//                		
-//                		log.info("Delete "+x);
-//                		log.info("rArr size: "+rArr.size());
-//                    	for (int y=0; y < rArr.size(); y++) {
-//                    		log.info("Delete "+y+", node: "+rArr.get(y));
-//                    		translations.item(x).removeChild(translations.item(x).getChildNodes().item((int) rArr.get(y)));
-//                    	}
-//                    }
-//                } catch (Exception ex) {
-//                	log.info("Delete dummy child: exception"+ex.getMessage());
-//                }
                 break;
             }
         }

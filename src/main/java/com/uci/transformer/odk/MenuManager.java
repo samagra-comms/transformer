@@ -955,7 +955,7 @@ public class MenuManager {
                         }
                         ss.addSelectOneOptions(options, "vacancies");
                     }
-//                    log.info("Form XML :" +ss.getXML());
+                    log.info("Form XML :" +ss.getXML());
                 } catch(Exception e) {
                 	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
                 	e.printStackTrace();
