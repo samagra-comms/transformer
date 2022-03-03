@@ -206,28 +206,27 @@ public class MenuManager {
         }
         
 
-    	log.info("MenuManager XPath: "+xpath);
-    	if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
-        	setFormLanguage(answer);
-        	log.info("2 Selected Lang: "+formController.getModel().getLanguage());
-    	}
-        
-//        log.info("MenuManager XPath: "+xpath);
-//        if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
+//    	log.info("MenuManager XPath: "+xpath);
+//    	if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
 //        	setFormLanguage(answer);
-//        	log.info("2 Selected language: "+formController.getModel().getLanguage());
-//        	
-//        	formController.stepToNextEvent();
-//        	try {
-//                udpatedInstanceXML = getCurrentInstance();
-//            } catch (IOException e) {
-//            	e.printStackTrace();
-//            }
-//
-//            nextQuestion = createView(formController.getModel().getEvent(), "");
-//            currentPath = getXPath(formController, formController.getModel().getFormIndex());
-//        } else 
-        if (answer != null && answer.equals(assesOneLevelUpChar)) {
+//        	log.info("2 Selected Lang: "+formController.getModel().getLanguage());
+//    	}
+        
+        log.info("MenuManager XPath: "+xpath);
+        if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
+        	setFormLanguage(answer);
+        	log.info("2 Selected language: "+formController.getModel().getLanguage());
+        	
+        	formController.stepToNextEvent();
+        	try {
+                udpatedInstanceXML = getCurrentInstance();
+            } catch (IOException e) {
+            	e.printStackTrace();
+            }
+
+            nextQuestion = createView(formController.getModel().getEvent(), "");
+            currentPath = getXPath(formController, formController.getModel().getFormIndex());
+        } else if (answer != null && answer.equals(assesOneLevelUpChar)) {
         	/* for level one up character, if last message xpath contains eof, restart the bot */
             if(xpath.contains("eof")) {
                  xpath = null;
