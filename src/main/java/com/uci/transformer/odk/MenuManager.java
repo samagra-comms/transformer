@@ -200,25 +200,34 @@ public class MenuManager {
         XMessagePayload nextQuestion;
         SaveStatus saveStatus = new SaveStatus();
         
-        if(xpath == null) {
+        if(xpath == null && formController.getModel().getLanguages() != null) {
         	setFormLanguage("English (en)");
         	log.info("1 Selected language: "+formController.getModel().getLanguage());
         }
         
-        if(xpath != null && xpath.equals("question./data/intro_group[1]/opt_language[1]")) {
-        	setFormLanguage(answer);
-        	log.info("2 Selected language: "+formController.getModel().getLanguage());
-        	
-        	formController.stepToNextEvent();
-        	try {
-                udpatedInstanceXML = getCurrentInstance();
-            } catch (IOException e) {
-            	e.printStackTrace();
-            }
 
-            nextQuestion = createView(formController.getModel().getEvent(), "");
-            currentPath = getXPath(formController, formController.getModel().getFormIndex());
-        } else if (answer != null && answer.equals(assesOneLevelUpChar)) {
+    	log.info("MenuManager XPath: "+xpath);
+    	if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
+        	setFormLanguage(answer);
+        	log.info("2 Selected Lang: "+formController.getModel().getLanguage());
+    	}
+        
+//        log.info("MenuManager XPath: "+xpath);
+//        if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
+//        	setFormLanguage(answer);
+//        	log.info("2 Selected language: "+formController.getModel().getLanguage());
+//        	
+//        	formController.stepToNextEvent();
+//        	try {
+//                udpatedInstanceXML = getCurrentInstance();
+//            } catch (IOException e) {
+//            	e.printStackTrace();
+//            }
+//
+//            nextQuestion = createView(formController.getModel().getEvent(), "");
+//            currentPath = getXPath(formController, formController.getModel().getFormIndex());
+//        } else 
+        if (answer != null && answer.equals(assesOneLevelUpChar)) {
         	/* for level one up character, if last message xpath contains eof, restart the bot */
             if(xpath.contains("eof")) {
                  xpath = null;
@@ -300,7 +309,7 @@ public class MenuManager {
         } else {
             try {
                 if (xpath != null && !xpath.equals("endOfForm")) {
-                    saveStatus = addResponseToForm(getIndexFromXPath(xpath, formController), answer);
+                    saveStatus = addResponseToForm(getIndexFromXPath(xpath, formController), answer, xpath);
                     udpatedInstanceXML = saveStatus.getInstanceXML();
                 } else {
                     FormInstance formInstance = formController.getModel().getForm().getInstance();
@@ -377,7 +386,6 @@ public class MenuManager {
     }
     
     private void setFormLanguage(String lang) {
-//    	formController.setLanguage(lang);
     	String langArr[] = lang.split(" ");
     	try {
     		if(langArr[0] != null && !langArr[0].isEmpty()) {
@@ -387,7 +395,10 @@ public class MenuManager {
     	} catch (NumberFormatException ex) {
     		log.info("Language text does not contain a number");
     	}
-    	lang = String.join(" ", langArr);
+    	
+    	if(langArr.length > 0) {	
+    		lang = String.join(" ", langArr);
+        }
     	
     	final String[] languages = formController.getModel().getLanguages();
         if (languages != null) {
@@ -407,14 +418,15 @@ public class MenuManager {
      * @return XMessagePayload
      */
     public XMessagePayload getQuestionPayloadFromXPath(String xpathStr) {
+    	log.info("getQuestionPayloadFromXPath called");
     	new XFormsModule().registerModule();
-        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
-        formController = fecWrapper.controller;
+        FECWrapper fecWrapper2 = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        FormEntryController formController2 = fecWrapper2.controller;
         
         /* Previous Question */
         ArrayList<ButtonChoice> choices = new ArrayList();
         choices = getChoices(choices);
-        String questionText = renderQuestion(formController);
+        String questionText = renderQuestion(formController2);
         
         XMessagePayload payload = XMessagePayload.builder()
         								.text(questionText)
@@ -422,8 +434,8 @@ public class MenuManager {
         								.build();
         
         try {
-        	if(formController.getModel().getQuestionPrompt().getBindAttributes() != null) {
-        		payload = getPayloadWithBindTags(payload, formController.getModel().getQuestionPrompt().getBindAttributes());
+        	if(formController2.getModel().getQuestionPrompt().getBindAttributes() != null) {
+        		payload = getPayloadWithBindTags(payload, formController2.getModel().getQuestionPrompt().getBindAttributes());
             }
         } catch (Exception e) {
         	log.info("Exception in getQuestionPayloadFromXPath for bind attributes: "+e.getMessage());
@@ -438,11 +450,12 @@ public class MenuManager {
      * @return Question
      */
     public Question getQuestionFromXPath(String xpathStr) {
+    	log.info("getQuestionPayloadFromXPath called");
     	new XFormsModule().registerModule();
-        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
-        formController = fecWrapper.controller;
+        FECWrapper fecWrapper2 = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        FormEntryController formController2 = fecWrapper2.controller;
         
-    	String formVersion = formController.getModel().getForm().getInstance().formVersion;
+    	String formVersion = formController2.getModel().getForm().getInstance().formVersion;
         Question question = new Question();
         question.setQuestionType(Question.QuestionType.STRING);
         question.setFormID(formID);
@@ -483,11 +496,12 @@ public class MenuManager {
         return payload.toString();
     }
 
-    public SaveStatus addResponseToForm(FormIndex formIndex, String value) throws IOException {
+    public SaveStatus addResponseToForm(FormIndex formIndex, String value, String xpath) throws IOException {
         int saveStatus = -1;
         if (value != null) {
             // Works with name but you get Label
             try {
+            	log.info("3 Selected Lang: "+formController.getModel().getLanguage());
                 if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
                     List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     boolean found = false;
@@ -955,7 +969,7 @@ public class MenuManager {
                         }
                         ss.addSelectOneOptions(options, "vacancies");
                     }
-                    log.info("Form XML :" +ss.getXML());
+//                    log.info("Form XML :" +ss.getXML());
                 } catch(Exception e) {
                 	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
                 	e.printStackTrace();
@@ -1094,13 +1108,14 @@ public class MenuManager {
      */
     private String getLocaleChoiceText(SelectChoice item) {
     	String locale = "";
-    	if(formController.getModel().getLanguage() != null 
+    	if(formController.getModel().getLanguages() != null 
+    			&& formController.getModel().getLanguage() != null 
 				&& !formController.getModel().getLanguage().isEmpty()) {
     		locale = formController.getModel().getForm().getLocalizer().getLocale();
     			
     	}
     	String label = item.getLabelInnerText();
-    	log.info("Label first: "+label);
+    	log.info("Label first: "+label+", locale: "+locale);
 		if(!locale.isEmpty() && item.getTextID() != null && !item.getTextID().isEmpty()) {
 			label = formController.getModel().getForm().getLocalizer().getLocaleData(locale).get(item.getTextID());
 			log.info("Label: "+label+", textid: "+item.getTextID()+", value: "+item.getValue());
