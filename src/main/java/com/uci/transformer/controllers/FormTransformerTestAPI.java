@@ -18,6 +18,9 @@ import com.uci.transformer.odk.utilities.WebCredentialsUtils;
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import okhttp3.OkHttpClient;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +40,9 @@ public class FormTransformerTestAPI {
 
     private static final String template = "Hello, %s!";
     private final AtomicLong counter = new AtomicLong();
+    
+    @Autowired
+    public RedisTemplate<String, Object> redisTemplate;
 
     private void downloadForms() {
         //Empty the database and folder
@@ -99,7 +105,7 @@ public class FormTransformerTestAPI {
         log.info("InstanceCurrentXML" + instanceXMlPrevious);
         log.info("botFormName" +  botFormName);
         String formPath = ODKConsumerReactive.getFormPath(botFormName);
-        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName).start();
+        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName, redisTemplate, "1234567890").start();
         System.out.println(serviceResponse.getCurrentResponseState());
         return serviceResponse;
     }

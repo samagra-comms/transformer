@@ -1,6 +1,8 @@
 package com.uci.transformer.odk;
 
 import java.util.Arrays;
+
+import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
 import com.uci.transformer.odk.repository.QuestionRepository;
@@ -12,6 +14,7 @@ import lombok.extern.java.Log;
 import messagerosa.core.model.ButtonChoice;
 import messagerosa.core.model.StylingTag;
 import messagerosa.core.model.XMessagePayload;
+import reactor.core.publisher.Flux;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.javarosa.core.model.*;
@@ -36,6 +39,8 @@ import org.javarosa.xpath.XPathTypeMismatchException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.io.*;
 import java.nio.file.FileSystems;
@@ -83,8 +88,10 @@ public class MenuManager {
     String stylingTag;
     String flow;
     Integer questionIndex;
+    RedisTemplate<String, Object> redisTemplate;
+    String userID;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisTemplate redisTemplate, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -92,11 +99,13 @@ public class MenuManager {
         this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
+        this.redisTemplate = redisTemplate;
+        this.userID = userID;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisTemplate redisTemplate, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -105,11 +114,14 @@ public class MenuManager {
         this.isPrefilled = false;
         this.formID = formID;
         this.user = user;
+        this.redisTemplate = redisTemplate;
+        this.userID = userID;
+
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo) {
+                       Boolean isPrefilled, QuestionRepository questionRepo, RedisTemplate redisTemplate, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -118,13 +130,15 @@ public class MenuManager {
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
+        this.redisTemplate = redisTemplate;
+        this.userID = userID;
         
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign) {
+                       boolean shouldUpdateFormXML, JSONObject campaign, RedisTemplate redisTemplate, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -136,7 +150,9 @@ public class MenuManager {
         this.user=user;
         this.shouldUpdateFormXML = shouldUpdateFormXML;
         this.campaign = campaign;
-
+        this.redisTemplate = redisTemplate;
+        this.userID = userID;
+        
         setAssesmentCharacters();
     }
     
@@ -200,17 +216,18 @@ public class MenuManager {
         XMessagePayload nextQuestion;
         SaveStatus saveStatus = new SaveStatus();
         
-        if(xpath == null && formController.getModel().getLanguages() != null) {
-        	setFormLanguage("English (en)");
-        	log.info("1 Selected language: "+formController.getModel().getLanguage());
-        }
+//        if(xpath == null && formController.getModel().getLanguages() != null) {
+//        	setFormLanguage("English (en)");
+//        	log.info("1 Selected language: "+formController.getModel().getLanguage());
+//        }
         
 
+        String langCache = getFormLanguageCache();
 //    	log.info("MenuManager XPath: "+xpath);
-//    	if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
-//        	setFormLanguage(answer);
-//        	log.info("2 Selected Lang: "+formController.getModel().getLanguage());
-//    	}
+    	if(formController.getModel().getLanguages() != null && langCache != null && !langCache.isEmpty()) {
+        	setFormLanguage(langCache);
+        	log.info("1 Selected Lang: "+formController.getModel().getLanguage());
+    	}
         
         log.info("MenuManager XPath: "+xpath);
         if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
@@ -384,6 +401,40 @@ public class MenuManager {
 		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
     }
     
+    private String getFormLanguageCache() {
+    	try {
+	    	if(this.redisTemplate != null) {
+	    		HashOperations hashOperations = redisTemplate.opsForHash();
+	    		String language = (String)hashOperations.get(redisKeyWithPrefix("language"), redisKeyWithPrefix(this.userID));
+	    	  	if(language != null) {
+	    	  		return language;
+	    	  	} else {
+	    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
+	    	  	}
+	    	}
+    	} catch (Exception e) {
+    		log.info("Exception in getFormLanguageCache: "+e.getMessage());
+    	}
+    	return "English (en)";
+    }
+    
+    private void setFormLanguageCache(String language) {
+    	try {
+    		if(this.redisTemplate != null) {
+        		HashOperations hashOperations = redisTemplate.opsForHash();
+        		hashOperations.put(redisKeyWithPrefix("language"), redisKeyWithPrefix(this.userID), language);
+        	  	log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
+        	}
+    	} catch (Exception e) {
+    		log.info("Exception in setFormLanguageCache: "+e.getMessage());
+    	}
+    	
+    }
+    
+    private String redisKeyWithPrefix(String key) {
+    	return System.getenv("ENV")+"-"+key;
+    }
+    
     private void setFormLanguage(String lang) {
     	String langArr[] = lang.split(" ");
     	try {
@@ -405,6 +456,7 @@ public class MenuManager {
             	log.info("A lang "+i+": "+languages[i]);
                 if (lang.equals(languages[i])) {
                     formController.setLanguage(lang);
+                    setFormLanguageCache(lang);
                     break;
                 }
             }
