@@ -1014,13 +1014,21 @@ public class MenuManager {
                     log.info("matchedVacancies count: "+matchedVacancies.length());
                     if(matchedVacancies.length() > 0){
                         for(int i=0; i<matchedVacancies.length(); i++){
-                            String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
-                                    " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
-                            String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
-                            log.info("vacancy label: "+label+", value: "+value);
-                            options.add(Item.builder().label(label).value(value).build());
+                            try {
+                            	String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
+                                        " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
+                                String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
+                                log.info("vacancy label: "+label+", value: "+value);
+                                options.add(Item.builder().label(label).value(value).build());
+                            } catch (Exception ex) {
+                            	log.info("Exception in createFormDefFromCacheOrXml forloop: "+ex.getMessage());
+                            	ex.printStackTrace();
+                            }
+                        	
                         }
-                        ss.addSelectOneOptions(options, "vacancies");
+//                        if(options.size() > 0) {
+                        	ss.addSelectOneOptions(options, "vacancies");
+//                        }
                     }
 //                    log.info("Form XML :" +ss.getXML());
                 } catch(Exception e) {
