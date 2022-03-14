@@ -554,7 +554,8 @@ public class MenuManager {
         if (value != null) {
             // Works with name but you get Label
             try {
-            	log.info("3 Selected Lang: "+formController.getModel().getLanguage());
+//            	log.info("3 Selected Lang: "+formController.getModel().getLanguage());
+            	
                 if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
                     List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     boolean found = false;
@@ -602,12 +603,12 @@ public class MenuManager {
                             saveStatus = formController.answerQuestion(formIndex, answerData, true);
                         }
                     } catch (Exception e) {
-                        log.severe("Error in filling form response");
+                        log.severe("Error in filling form response: "+e.getMessage());
                         saveStatus = ANSWER_OK;
                     }
                 }
             } catch (Exception e) {
-                log.severe("Error in filling form response");
+                log.severe("Error in filling form response: "+e.getMessage());
                 IAnswerData answerData = new IntegerData(Integer.parseInt(value));
                 saveStatus = formController.answerQuestion(formIndex, answerData, true);
             }
