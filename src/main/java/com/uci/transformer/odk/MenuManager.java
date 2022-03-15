@@ -8,6 +8,8 @@ import com.uci.transformer.odk.entity.Question;
 import com.uci.transformer.odk.repository.QuestionRepository;
 import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.Item;
+import com.uci.utils.cache.service.RedisCacheService;
+
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
@@ -88,10 +90,10 @@ public class MenuManager {
     String stylingTag;
     String flow;
     Integer questionIndex;
-    RedisTemplate<String, Object> redisTemplate;
+    RedisCacheService redisCacheService;
     String userID;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisTemplate redisTemplate, String userID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -99,13 +101,13 @@ public class MenuManager {
         this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
-        this.redisTemplate = redisTemplate;
+        this.redisCacheService = redisCacheService;
         this.userID = userID;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisTemplate redisTemplate, String userID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -114,14 +116,14 @@ public class MenuManager {
         this.isPrefilled = false;
         this.formID = formID;
         this.user = user;
-        this.redisTemplate = redisTemplate;
+        this.redisCacheService = redisCacheService;
         this.userID = userID;
 
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo, RedisTemplate redisTemplate, String userID) {
+                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -130,7 +132,7 @@ public class MenuManager {
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
-        this.redisTemplate = redisTemplate;
+        this.redisCacheService = redisCacheService;
         this.userID = userID;
         
         setAssesmentCharacters();
@@ -138,7 +140,7 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign, RedisTemplate redisTemplate, String userID) {
+                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -150,7 +152,7 @@ public class MenuManager {
         this.user=user;
         this.shouldUpdateFormXML = shouldUpdateFormXML;
         this.campaign = campaign;
-        this.redisTemplate = redisTemplate;
+        this.redisCacheService = redisCacheService;
         this.userID = userID;
         
         setAssesmentCharacters();
@@ -405,9 +407,8 @@ public class MenuManager {
     
     private String getFormLanguageCache() {
     	try {
-	    	if(this.redisTemplate != null) {
-	    		HashOperations hashOperations = redisTemplate.opsForHash();
-	    		String language = (String)hashOperations.get(redisKeyWithPrefix("language"), redisKeyWithPrefix(this.userID));
+	    	if(this.redisCacheService != null) {
+	    		String language = (String)redisCacheService.getLanguageCache(this.userID);
 	    	  	if(language != null) {
 	    	  		return language;
 	    	  	} else {
@@ -422,10 +423,9 @@ public class MenuManager {
     
     private void setFormLanguageCache(String language) {
     	try {
-    		if(this.redisTemplate != null) {
-        		HashOperations hashOperations = redisTemplate.opsForHash();
-        		hashOperations.put(redisKeyWithPrefix("language"), redisKeyWithPrefix(this.userID), language);
-        	  	log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
+    		if(this.redisCacheService != null) {
+        		redisCacheService.setLanguageCache(this.userID, language);
+                log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
         	}
     	} catch (Exception e) {
     		log.info("Exception in setFormLanguageCache: "+e.getMessage());

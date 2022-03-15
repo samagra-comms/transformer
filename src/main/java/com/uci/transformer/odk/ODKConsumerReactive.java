@@ -26,6 +26,7 @@ import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.FormInstanceUpdation;
 import com.uci.transformer.telemetry.AssessmentTelemetryBuilder;
 import com.uci.utils.CampaignService;
+import com.uci.utils.cache.service.RedisCacheService;
 import com.uci.utils.kafka.SimpleProducer;
 import com.uci.utils.telemetry.service.PosthogService;
 
@@ -50,8 +51,6 @@ import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.redis.core.HashOperations;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.client.RestTemplate;
@@ -141,9 +140,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     public PosthogService posthogService;
     
     @Autowired
-    public RedisTemplate<String, Object> redisTemplate;
-    
-    public HashOperations hashOperations;
+    public RedisCacheService redisCacheService;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -223,12 +220,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                 for (int i = 34; i < users.length(); i++) {
                     String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisTemplate, userPhone).start();
+                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone).start();
                     FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
                     ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                     ss.parse(response.currentResponseState);
                     String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisTemplate, userPhone);
+                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone);
                     response = mm.start();
 
                     // Create new xMessage from response
@@ -338,7 +335,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
                                                 ServiceResponse serviceResponse = new MenuManager(null,
                                                         null, null, formPath, formID, false,
-                                                        questionRepo, redisTemplate, xMessage.getTo().getUserID()).start();
+                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID()).start();
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
@@ -349,7 +346,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                             			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
                                             	mm = new MenuManager(null, null, instanceXMlPrevious,
-                                                        formPath, formID, redisTemplate, xMessage.getTo().getUserID());
+                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID());
                                                 response[0] = mm.start();
                                             } else {
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
@@ -382,7 +379,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                             instanceXMlPrevious, formPath, formID,
-                                                            prefilled, questionRepo, user, true, camp, redisTemplate, xMessage.getTo().getUserID());
+                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID());
                                                 }else{
                                                 	prefilled = false;
                                                 	answer = previousMeta.currentAnswer;
@@ -392,7 +389,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                     		instanceXMlPrevious, formPath, formID,
-                                                    		prefilled, questionRepo, user, true, camp, redisTemplate, xMessage.getTo().getUserID());
+                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID());
                                                 }
                                                 response[0] = mm.start();
                                             }
@@ -441,7 +438,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         ServiceResponse serviceResponse = new MenuManager(
                                                                 null, null, null,
                                                                 getFormPath(nextFormID), nextFormID,
-                                                                false, questionRepo, redisTemplate, xMessage.getTo().getUserID())
+                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID())
                                                                 .start();
                                                         FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
@@ -452,7 +449,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         log.debug("Instance value >> " + instanceXMlPrevious);
                                                         MenuManager mm2 = new MenuManager(null, null,
                                                                 instanceXMlPrevious, getFormPath(nextFormID), nextFormID, true,
-                                                                questionRepo, redisTemplate, xMessage.getTo().getUserID());
+                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID());
                                                         ServiceResponse response = mm2.start();
                                                         xMessage.setApp(nextAppName);
                                                         return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
@@ -788,8 +785,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     
     private Flux<XMessageDAO> getLatestXMessage(String appName, String userID) {
     	try {
-    		hashOperations = redisTemplate.opsForHash();
-            XMessageDAO xMessageDAO = (XMessageDAO)hashOperations.get(redisKeyWithPrefix("XMessageDAO"), redisKeyWithPrefix(userID));
+            XMessageDAO xMessageDAO = (XMessageDAO)redisCacheService.getXMessageDaoCache(userID);
     	  	if(xMessageDAO != null) {
     	  		log.info("redis key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
     	  		log.info("Redis xMsgDao id: "+xMessageDAO.getId()+", dao app: "+xMessageDAO.getApp()

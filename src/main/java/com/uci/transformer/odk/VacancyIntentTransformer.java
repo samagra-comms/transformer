@@ -14,6 +14,7 @@ import com.uci.transformer.odk.repository.QuestionRepository;
 import com.uci.transformer.odk.repository.StateRepository;
 import com.uci.transformer.odk.utilities.FormInstanceUpdation;
 import com.uci.utils.CampaignService;
+import com.uci.utils.cache.service.RedisCacheService;
 import com.uci.utils.kafka.SimpleProducer;
 import lombok.extern.slf4j.Slf4j;
 import messagerosa.core.model.SenderReceiverInfo;
@@ -87,7 +88,7 @@ public class VacancyIntentTransformer extends TransformerProvider {
     private String producerID;
     
     @Autowired
-    public RedisTemplate<String, Object> redisTemplate;
+    public RedisCacheService redisCacheService;
 
     // Listen to all ODK based transformers
     @KafkaListener(id = "vacancyIntent-transformer", topics = {"com.rozgarbot.transformer"})
@@ -199,18 +200,18 @@ public class VacancyIntentTransformer extends TransformerProvider {
                                             MenuManager mm;
                                             if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals("*") || isStartingMessage) {
                                                 previousMeta.currentAnswer = "*";
-                                                ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisTemplate, xMessage.getTo().getUserID()).start();
+                                                ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, xMessage.getTo().getUserID()).start();
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                                                 String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
                                                         ss.getXML();
                                                 log.debug("Instance value >> " + instanceXMlPrevious);
-                                                mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisTemplate, xMessage.getTo().getUserID());
+                                                mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, xMessage.getTo().getUserID());
                                                 response[0] = mm.start();
                                             } else {
                                                 mm = new MenuManager(previousMeta.previousPath, previousMeta.currentAnswer,
-                                                        previousMeta.instanceXMlPrevious, formPath, formID, false, questionRepo, redisTemplate, xMessage.getTo().getUserID());
+                                                        previousMeta.instanceXMlPrevious, formPath, formID, false, questionRepo, redisCacheService, xMessage.getTo().getUserID());
                                                 response[0] = mm.start();
                                             }
 
@@ -223,7 +224,7 @@ public class VacancyIntentTransformer extends TransformerProvider {
                                                                  public XMessage apply(String nextFormID) {
                                                                      MenuManager mm2 = new MenuManager(null,
                                                                              null, null, getFormPath(nextFormID),
-                                                                             nextFormID, false, questionRepo, redisTemplate, xMessage.getTo().getUserID());
+                                                                             nextFormID, false, questionRepo, redisCacheService, xMessage.getTo().getUserID());
                                                                      ServiceResponse response = mm2.start();
                                                                      finalXMsg[0] = decodeXMessage(xMessage, response, formID);
                                                                      return finalXMsg[0];
@@ -269,7 +270,7 @@ public class VacancyIntentTransformer extends TransformerProvider {
                 String nextFormID = result.getT1();
                 String appName = result.getT2();
                 MenuManager mm = new MenuManager(null, null, null,
-                        getFormPath(nextFormID), nextFormID, false, questionRepo, redisTemplate, xMessage.getTo().getUserID());
+                        getFormPath(nextFormID), nextFormID, false, questionRepo, redisCacheService, xMessage.getTo().getUserID());
                 response[0] = mm.start();
                 xMessage.setApp(appName);
                 return decodeXMessage(xMessage, response[0], nextFormID);
@@ -339,13 +340,13 @@ public class VacancyIntentTransformer extends TransformerProvider {
 
                 for (int i = 122; i < users.length(); i++) {
                     String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisTemplate, userPhone).start();
+                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone).start();
                     FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
                     //ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                     ss.parse(response.currentResponseState);
                     // String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
                     String instanceXMlPrevious = ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisTemplate, userPhone);
+                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone);
                     response = mm.start();
                     log.info("Iteration n={}", i);
 

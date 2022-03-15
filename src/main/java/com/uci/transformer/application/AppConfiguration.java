@@ -53,15 +53,6 @@ public class AppConfiguration {
     
     @Value("${campaign.admin.token}")
 	public String CAMPAIGN_ADMIN_TOKEN;
-    
-    @Value("${spring.redis.database}")
-	private String redisDb;
-	
-	@Value("${spring.redis.host}")
-	private String redisHost;
-	
-	@Value("${spring.redis.port}")
-	private String redisPort;
 
     @Bean
     @Qualifier("rest")
@@ -180,30 +171,6 @@ public class AppConfiguration {
     	KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory());
     	return (KafkaTemplate<String, String>) kafkaTemplate;
     }
-    
-    @Bean
-	JedisConnectionFactory jedisConnectionFactory() {
-		JedisConnectionFactory jedisConFactory
-	      = new JedisConnectionFactory();
-	    jedisConFactory.setHostName(redisHost);
-	    Integer port = Integer.parseInt(redisPort);
-	    jedisConFactory.setPort(port);
-	    Integer dbIndex = Integer.parseInt(redisDb);
-	    jedisConFactory.setDatabase(dbIndex);
-//		jedisConFactory.getPoolConfig().setMaxIdle(30);
-//		jedisConFactory.getPoolConfig().setMinIdle(10);
-	    return jedisConFactory;
-	}
-
-	@Bean
-	public RedisTemplate<String, Object> redisTemplate() {
-	    RedisTemplate<String, Object> template = new RedisTemplate<>();
-	    template.setConnectionFactory(jedisConnectionFactory());
-	    template.setKeySerializer(new StringRedisSerializer());
-	    template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-//	    template.setEnableTransactionSupport(true);
-	    return template;
-	}
 
 //    @Bean
 //    ReactiveProducer kafkaReactiveProducer() {

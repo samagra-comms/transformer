@@ -15,6 +15,8 @@ import com.uci.transformer.odk.persistance.FormsDao;
 import com.uci.transformer.odk.persistance.JsonDB;
 import com.uci.transformer.odk.utilities.FormListDownloader;
 import com.uci.transformer.odk.utilities.WebCredentialsUtils;
+import com.uci.utils.cache.service.RedisCacheService;
+
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import okhttp3.OkHttpClient;
@@ -42,7 +44,7 @@ public class FormTransformerTestAPI {
     private final AtomicLong counter = new AtomicLong();
     
     @Autowired
-    public RedisTemplate<String, Object> redisTemplate;
+    public RedisCacheService redisCacheService;
 
     private void downloadForms() {
         //Empty the database and folder
@@ -105,7 +107,7 @@ public class FormTransformerTestAPI {
         log.info("InstanceCurrentXML" + instanceXMlPrevious);
         log.info("botFormName" +  botFormName);
         String formPath = ODKConsumerReactive.getFormPath(botFormName);
-        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName, redisTemplate, "1234567890").start();
+        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName, redisCacheService, "1234567890").start();
         System.out.println(serviceResponse.getCurrentResponseState());
         return serviceResponse;
     }
