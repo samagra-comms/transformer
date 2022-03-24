@@ -14,6 +14,7 @@ import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
 import messagerosa.core.model.ButtonChoice;
+import messagerosa.core.model.MediaCategory;
 import messagerosa.core.model.StylingTag;
 import messagerosa.core.model.XMessagePayload;
 import reactor.core.publisher.Flux;
@@ -88,12 +89,13 @@ public class MenuManager {
     boolean shouldUpdateFormXML = false;
     Integer formDepth;
     String stylingTag;
+    XMessagePayload payload;
     String flow;
     Integer questionIndex;
     RedisCacheService redisCacheService;
     String userID;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -103,11 +105,12 @@ public class MenuManager {
         this.formID = formID;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.payload = payload;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -118,12 +121,13 @@ public class MenuManager {
         this.user = user;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.payload = payload;
 
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID) {
+                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -134,13 +138,14 @@ public class MenuManager {
         this.questionRepo = questionRepo;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.payload = payload;
         
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID) {
+                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -154,6 +159,7 @@ public class MenuManager {
         this.campaign = campaign;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.payload = payload;
         
         setAssesmentCharacters();
     }
@@ -216,12 +222,7 @@ public class MenuManager {
         String currentPath = "";
         String udpatedInstanceXML = "";
         XMessagePayload nextQuestion;
-        SaveStatus saveStatus = new SaveStatus();
-        
-//        if(xpath == null && formController.getModel().getLanguages() != null) {
-//        	setFormLanguage("English (en)");
-//        	log.info("1 Selected language: "+formController.getModel().getLanguage());
-//        }
+        SaveStatus saveStatus = new SaveStatus();        
         
 
         String langCache = getFormLanguageCache();
@@ -303,7 +304,7 @@ public class MenuManager {
 
                     // Skip a non question TODO: Should remove all non questions. Right now doing only for one.
                     if (formController.getModel().getEvent() != FormEntryController.EVENT_GROUP) {
-                    	formController.getModel().getQuestionPrompt();
+                        formController.getModel().getQuestionPrompt();
                         formController.stepToNextEvent();
                     }
                 } catch (Exception e) {
@@ -314,7 +315,7 @@ public class MenuManager {
             try {
                 udpatedInstanceXML = getCurrentInstance();
             } catch (IOException e) {
-            	e.printStackTrace();
+                e.printStackTrace();
             }
 
             nextQuestion = createView(formController.getModel().getEvent(), "");
@@ -591,6 +592,71 @@ public class MenuManager {
                                 }
                             }
                         }
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_IMAGE_CHOOSE) { 
+                	 TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                     try {
+                    	 if(this.payload != null && this.payload.getMedia() != null 
+                     			&& this.payload.getMedia().getCategory() != null 
+                     			&& this.payload.getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+                    		 IAnswerData answerData = new StringData(value);
+                             saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	 }
+                     } catch (Exception e) {
+                        log.severe("Exception in addResponseToForm for image type.");
+                        e.printStackTrace();
+                     }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_AUDIO_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getMedia() != null 
+                    			&& this.payload.getMedia().getCategory() != null 
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.AUDIO)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for audio type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_VIDEO_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getMedia() != null 
+                    			&& this.payload.getMedia().getCategory() != null 
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.VIDEO)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for video type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_FILE_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	log.info("category: "+this.payload.getMedia().getCategory());
+                    	if(this.payload != null && this.payload.getMedia() != null 
+                    			&& this.payload.getMedia().getCategory() != null 
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.FILE)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for file type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getDataType() == Constants.DATATYPE_GEOPOINT) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getLocation() != null) {
+                    		log.info("location found with value: "+value);
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for video type.");
+                       e.printStackTrace();
                     }
                 } else {
                     try {
@@ -879,6 +945,7 @@ public class MenuManager {
                     		XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build(), 
                     		formController.getModel().getQuestionPrompt().getBindAttributes());
                 } catch (Exception e) {
+                	e.printStackTrace();
                     log.info("Non Question data type");
                     formController.stepToNextEvent();
                     String currentQuestionString = renderQuestion(formController);

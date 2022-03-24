@@ -33,6 +33,7 @@ import com.uci.utils.telemetry.service.PosthogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import messagerosa.core.model.ButtonChoice;
+import messagerosa.core.model.LocationParams;
 import messagerosa.core.model.SenderReceiverInfo;
 import messagerosa.core.model.Transformer;
 import messagerosa.core.model.XMessage;
@@ -220,12 +221,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                 for (int i = 34; i < users.length(); i++) {
                     String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone).start();
+                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone, null).start();
                     FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
                     ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                     ss.parse(response.currentResponseState);
                     String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone);
+                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone, null);
                     response = mm.start();
 
                     // Create new xMessage from response
@@ -300,7 +301,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                             log.info("current form path:"+formPath);
                             
                             isStartingMessage = xMessage.getPayload().getText().equals(campaign.findValue("startingMessage").asText());
-
                             switchFromTo(xMessage);
                             
                             Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
@@ -335,7 +335,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
                                                 ServiceResponse serviceResponse = new MenuManager(null,
                                                         null, null, formPath, formID, false,
-                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID()).start();
+                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID(), null).start();
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
@@ -346,7 +346,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                             			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
                                             	mm = new MenuManager(null, null, instanceXMlPrevious,
-                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID());
+                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
                                                 response[0] = mm.start();
                                             } else {
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
@@ -379,7 +379,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                             instanceXMlPrevious, formPath, formID,
-                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID());
+                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
                                                 }else{
                                                 	prefilled = false;
                                                 	answer = previousMeta.currentAnswer;
@@ -389,7 +389,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                     		instanceXMlPrevious, formPath, formID,
-                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID());
+                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
                                                 }
                                                 response[0] = mm.start();
                                             }
@@ -409,7 +409,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             // Save answerData => PreviousQuestion + CurrentAnswer
                                             Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment =
                                                     updateQuestionAndAssessment(
-                                                    		previousMeta,
+                                                            previousMeta,
                                                             getPreviousQuestions(
                                                                     previousMeta.previousPath,
                                                                     formID,
@@ -422,9 +422,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     );
 
 
-                                            if (response[0].currentIndex.contains("eof__")) {
-                                                String nextBotID = mm.getNextBotID(response[0].currentIndex);
-                                                log.info("Next bot id: "+nextBotID);
+                                            /* If form contains eof__, then process next bot by id addded with eof__bot_id, else process message */
+                                            if (response[0].currentIndex.contains("eof__")) {    
+                                            	String nextBotID = mm.getNextBotID(response[0].currentIndex);
 
                                                 return Mono.zip(
                                                         campaignService.getBotNameByBotID(nextBotID),
@@ -438,7 +438,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         ServiceResponse serviceResponse = new MenuManager(
                                                                 null, null, null,
                                                                 getFormPath(nextFormID), nextFormID,
-                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID())
+                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID(), null)
                                                                 .start();
                                                         FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
@@ -449,7 +449,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         log.debug("Instance value >> " + instanceXMlPrevious);
                                                         MenuManager mm2 = new MenuManager(null, null,
                                                                 instanceXMlPrevious, getFormPath(nextFormID), nextFormID, true,
-                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID());
+                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID(), null);
                                                         ServiceResponse response = mm2.start();
                                                         xMessage.setApp(nextAppName);
                                                         return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
@@ -599,9 +599,13 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                             // Handle image responses to a question
                             if (message.getPayload() != null) {
-                                if (message.getPayload().getText() == null) {
-                                    formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
-                                } else formManagerParams.setCurrentAnswer(message.getPayload().getText());
+                            	if(message.getPayload().getMedia() != null) {
+                                	formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
+                                } else if(message.getPayload().getLocation() != null) {
+                                	formManagerParams.setCurrentAnswer(getLocationContentText(message.getPayload().getLocation()));
+                                } else  {
+                                	formManagerParams.setCurrentAnswer(message.getPayload().getText());
+                                }
                             } else {
                                 formManagerParams.setCurrentAnswer("");
                             }
@@ -619,6 +623,26 @@ public class ODKConsumerReactive extends TransformerProvider {
         }
     }
 
+    /**
+     * Get location content text
+     * @param location
+     * @return
+     */
+    private String getLocationContentText(LocationParams location) {
+    	String text = "";
+    	text = location.getLatitude()+" "+location.getLongitude();
+    	if(location.getAddress() != null && !location.getAddress().isEmpty()) {
+    		text += " "+location.getAddress();
+    	}
+    	if(location.getName() != null && !location.getName().isEmpty()) {
+    		text += " "+location.getName();
+    	}
+    	if(location.getUrl() != null && !location.getUrl().isEmpty()) {
+    		text += " "+location.getUrl();
+    	}
+    	return text.trim();
+    }
+    
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
@@ -759,7 +783,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 assessment,
                                 questionPayload,
                                 0,
-                                xMessage.getTo().getEncryptedDeviceID());
+                                xMessage.getTo().getEncryptedDeviceID(),
+                                xMessage.getMessageId().getChannelMessageId());
                 System.out.println(telemetryEvent);
                 kafkaProducer.send(telemetryTopic, telemetryEvent);
             }

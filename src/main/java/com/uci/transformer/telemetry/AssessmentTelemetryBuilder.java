@@ -37,7 +37,8 @@ public class AssessmentTelemetryBuilder {
 	// Survey/Questionnaire"
 
 	public String build(String botOrg, String channel, String provider, String producerID, String conversationOwnerID,
-			Question question, Assessment assessment, XMessagePayload questionPayload, long duration, String encyptedDeviceId) {
+			Question question, Assessment assessment, XMessagePayload questionPayload, long duration, String encyptedDeviceId,
+			String msgid) {
 //		ArrayList<ButtonChoice> buttonChoices = getQuestionChoices(questionPayload.getButtonChoices());
 		ArrayList<ButtonChoice> buttonChoices = questionPayload.getButtonChoices();
 		String questionType = getQuestionType(buttonChoices);
@@ -130,8 +131,17 @@ public class AssessmentTelemetryBuilder {
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
         String timestamp = fmt.format(localNow).toString();
         
-        String mid = ASSESS_EVENT_MID_PREFIX+UUID.nameUUIDFromBytes(timestamp.getBytes()).toString().replace("-", "");
+        // String mid = ASSESS_EVENT_MID_PREFIX;
+//		if(msgid != null && !msgid.isEmpty()) {
+//			mid += msgid;
+//		} else {
+//			mid += UUID.nameUUIDFromBytes(timestamp.getBytes()).toString().replace("-", "");
+//		}
+		// mid += UUID.nameUUIDFromBytes(timestamp.getBytes()).toString().replace("-", "");
 		
+		String mid = ASSESS_EVENT_MID_PREFIX+UUID.nameUUIDFromBytes(timestamp.getBytes()).toString().replace("-", "");
+		
+
 		//Telemetry
 		Telemetry telemetry = Telemetry.builder()
 										.eid(TelemetryEvents.ASSESS.getName())
