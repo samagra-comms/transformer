@@ -1,7 +1,7 @@
 package com.uci.transformer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.uci.transformer.User.UserService;
+import com.uci.utils.service.UserService;
 import com.uci.utils.CampaignService;
 import com.uci.utils.kafka.SimpleProducer;
 import io.fusionauth.domain.Application;
@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.Consumer;
+import com.uci.utils.model.UserWithTemplate;
 
 @Slf4j
 @Component

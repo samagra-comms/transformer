@@ -94,8 +94,9 @@ public class MenuManager {
     Integer questionIndex;
     RedisCacheService redisCacheService;
     String userID;
+    String appID;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -110,7 +111,7 @@ public class MenuManager {
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -121,13 +122,15 @@ public class MenuManager {
         this.user = user;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.appID = appID;
         this.payload = payload;
 
         setAssesmentCharacters();
     }
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
+                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID,
+                       String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -138,6 +141,7 @@ public class MenuManager {
         this.questionRepo = questionRepo;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.appID = appID;
         this.payload = payload;
         
         setAssesmentCharacters();
@@ -145,7 +149,8 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID, XMessagePayload payload) {
+                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID,
+                       String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -159,6 +164,7 @@ public class MenuManager {
         this.campaign = campaign;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.appID = appID;
         this.payload = payload;
         
         setAssesmentCharacters();
@@ -409,11 +415,15 @@ public class MenuManager {
     private String getFormLanguageCache() {
     	try {
 	    	if(this.redisCacheService != null) {
-	    		String language = (String)redisCacheService.getLanguageCache(this.userID);
+	    		String key = this.userID;
+	    		if(this.appID != null) {
+	    			key = this.appID+"-"+key;
+	    		}
+	    		String language = (String)redisCacheService.getLanguageCache(key);
 	    	  	if(language != null) {
 	    	  		return language;
 	    	  	} else {
-	    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
+	    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
 	    	  	}
 	    	}
     	} catch (Exception e) {
@@ -425,8 +435,12 @@ public class MenuManager {
     private void setFormLanguageCache(String language) {
     	try {
     		if(this.redisCacheService != null) {
-        		redisCacheService.setLanguageCache(this.userID, language);
-                log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(this.userID));
+    			String key = this.userID;
+	    		if(this.appID != null) {
+	    			key = this.appID+"-"+key;
+	    		}
+        		redisCacheService.setLanguageCache(key, language);
+                log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
         	}
     	} catch (Exception e) {
     		log.info("Exception in setFormLanguageCache: "+e.getMessage());

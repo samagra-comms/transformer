@@ -224,12 +224,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                 for (int i = 34; i < users.length(); i++) {
                     String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone, null).start();
+                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null).start();
                     FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
                     ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                     ss.parse(response.currentResponseState);
                     String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone, null);
+                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null);
                     response = mm.start();
 
                     // Create new xMessage from response
@@ -317,7 +317,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             MenuManager mm;
                                             ObjectMapper mapper = new ObjectMapper();
                                             JSONObject camp = null;
-                                            JSONObject user = UserService.getUserByPhoneFromFederatedServers(
+                                            JSONObject user = userService.getUserByPhoneFromFederatedServers(
                                                     campaign.findValue("id").asText(),
                                                     xMessage.getTo().getUserID()
                                             );
@@ -338,7 +338,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
                                                 ServiceResponse serviceResponse = new MenuManager(null,
                                                         null, null, formPath, formID, false,
-                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID(), null).start();
+                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null).start();
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
@@ -349,7 +349,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             	log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                             			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
                                             	mm = new MenuManager(null, null, instanceXMlPrevious,
-                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
+                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 response[0] = mm.start();
                                             } else {
                                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
@@ -382,7 +382,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                             instanceXMlPrevious, formPath, formID,
-                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
+                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 }else{
                                                 	prefilled = false;
                                                 	answer = previousMeta.currentAnswer;
@@ -392,7 +392,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                                     mm = new MenuManager(previousMeta.previousPath, answer,
                                                     		instanceXMlPrevious, formPath, formID,
-                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getPayload());
+                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 }
                                                 response[0] = mm.start();
                                             }
@@ -441,7 +441,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         ServiceResponse serviceResponse = new MenuManager(
                                                                 null, null, null,
                                                                 getFormPath(nextFormID), nextFormID,
-                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID(), null)
+                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null)
                                                                 .start();
                                                         FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
@@ -452,7 +452,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         log.debug("Instance value >> " + instanceXMlPrevious);
                                                         MenuManager mm2 = new MenuManager(null, null,
                                                                 instanceXMlPrevious, getFormPath(nextFormID), nextFormID, true,
-                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID(), null);
+                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null);
                                                         ServiceResponse response = mm2.start();
                                                         xMessage.setApp(nextAppName);
                                                         return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
