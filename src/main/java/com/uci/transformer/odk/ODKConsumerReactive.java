@@ -11,7 +11,7 @@ import com.jayway.jsonpath.PathNotFoundException;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
-import com.uci.transformer.User.UserService;
+import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
 import com.uci.transformer.odk.entity.GupshupStateEntity;
@@ -126,6 +126,9 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     CampaignService campaignService;
+    
+    @Autowired
+    UserService userService;
 
     @Value("${producer.id}")
     private String producerID;
@@ -213,7 +216,7 @@ public class ODKConsumerReactive extends TransformerProvider {
             @Override
             public List<XMessage> apply(JsonNode campaign) {
                 String campaignID = campaign.get("id").asText();
-                JSONArray users = UserService.getUsersFromFederatedServers(campaignID);
+                JSONArray users = userService.getUsersFromFederatedServers(campaignID);
                 String formID = getFormID(campaign);
                 String formPath = getFormPath(formID);
                 JsonNode firstTransformer = campaign.findValues("transformers").get(0).get(0);
