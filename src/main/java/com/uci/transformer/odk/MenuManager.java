@@ -1024,16 +1024,6 @@ public class MenuManager {
         			payload.setMediaCaption(attribute.getAttributeValue().toString());
         		} 
         	});
-
-            if(payload.getMedia() != null && payload.getMediaCaption() == null){
-                payload.setMediaCaption("Default-Caption");
-            }
-            if(payload.getStylingTag().equals(StylingTag.LIST)
-                    && payload.getButtonChoices().size() > 10){
-
-                payload.setStylingTag(null);
-            }
-
     	} catch (Exception e) {
     		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
     	}
