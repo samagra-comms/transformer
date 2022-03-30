@@ -261,7 +261,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                     @Override
                     public Mono<Mono<Mono<XMessage>>> apply(JsonNode campaign) {
                         if (campaign != null) {
-                        	log.info("1 From User ID:"+xMessage.getFrom().getUserID());
+                        	log.info("1 To User ID:"+xMessage.getTo().getUserID());
 //                        	Map<String, String> data = getCampaignAndFormIdFromXMessage(xMessage);
 //                        	
 //                            String formID = data.get("formID");
@@ -283,7 +283,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                             log.info("current form path:"+formPath);
                             
                             isStartingMessage = xMessage.getPayload().getText().equals(campaign.findValue("startingMessage").asText());
-                            switchFromTo(xMessage);
                             
                             Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
 
@@ -730,13 +729,6 @@ public class ODKConsumerReactive extends TransformerProvider {
             e.printStackTrace();
         }
         return cloneMessage;
-    }
-
-    private void switchFromTo(XMessage xMessage) {
-        SenderReceiverInfo from = xMessage.getFrom();
-        SenderReceiverInfo to = xMessage.getTo();
-        xMessage.setFrom(to);
-        xMessage.setTo(from);
     }
 
     private XMessage getMessageFromResponse(XMessage xMessage, ServiceResponse response) {
