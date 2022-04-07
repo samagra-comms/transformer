@@ -54,7 +54,7 @@ public class AssessmentTelemetryBuilder {
 		
 		
 		//Context Rollup
-		Map<String, Object> rollup = new HashMap<>();
+		Map<String, String> rollup = new HashMap<>();
 		rollup.put("l1", conversationOwnerID.toString()); //ConversationOwner value
 		rollup.put("l2", assessment.getBotID().toString()); //Conversation value
 		rollup.put("l3", xPath);
