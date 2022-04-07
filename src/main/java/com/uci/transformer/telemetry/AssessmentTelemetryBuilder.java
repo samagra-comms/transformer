@@ -38,26 +38,27 @@ public class AssessmentTelemetryBuilder {
 
 	public String build(String botOrg, String channel, String provider, String producerID, String conversationOwnerID,
 			Question question, Assessment assessment, XMessagePayload questionPayload, long duration, String encyptedDeviceId,
-			String msgid) {
+			String msgid, Boolean formEnd) {
 //		ArrayList<ButtonChoice> buttonChoices = getQuestionChoices(questionPayload.getButtonChoices());
 		ArrayList<ButtonChoice> buttonChoices = questionPayload.getButtonChoices();
 		String questionType = getQuestionType(buttonChoices);
 		
+		String xPath = question != null && question.getXPath() != null ? question.getXPath() : "";
+		
 		//Context Cdata
 		List<Map<String, Object>> cdata = new ArrayList<>();
-		Map<String, Object> map1 = new HashMap<>();
-		map1.put("type", "ConversationOwner");
-		map1.put("id", conversationOwnerID);
-		Map<String, Object> map2 = new HashMap<>();
-		map2.put("type", "Conversation");
-		map2.put("id", assessment.getBotID().toString());
-		cdata.add(map1);
-		cdata.add(map2);
+		cdata.add(setCdataItemMap("ConversationOwner", conversationOwnerID));
+		cdata.add(setCdataItemMap("Conversation", assessment.getBotID().toString()));
+		cdata.add(setCdataItemMap("XPath", xPath));
+		cdata.add(setCdataItemMap("FormEnd", formEnd.toString()));
+		
 		
 		//Context Rollup
-		Map<String, String> rollup = new HashMap<>();
+		Map<String, Object> rollup = new HashMap<>();
 		rollup.put("l1", conversationOwnerID.toString()); //ConversationOwner value
 		rollup.put("l2", assessment.getBotID().toString()); //Conversation value
+		rollup.put("l3", xPath);
+		rollup.put("l4", formEnd.toString());
 		
 		String channelName = (botOrg.equalsIgnoreCase("Anonymous")) || botOrg.isEmpty() ? DIKSHA_ORG : botOrg;
 		String userID = "";
@@ -85,7 +86,8 @@ public class AssessmentTelemetryBuilder {
 		Map<String, String> questionRollup = new HashMap<>();
 		questionRollup.put("l1", "BotOwnerID");
 		questionRollup.put("l2", "BotID");
-		questionRollup.put("l3", "QuestionID");
+		questionRollup.put("l3", "QuestionXPath");
+		questionRollup.put("l4", "FormEnd");
 		
 		//Object
 		Target object = Target.builder().id(question.getId().toString()).type(question.getQuestionType().name())
@@ -209,6 +211,19 @@ public class AssessmentTelemetryBuilder {
 			}
 		}
 		return params;
+	}
+	
+	/**
+	 * Set cdata item map 
+	 * @param type
+	 * @param id
+	 * @return
+	 */
+	private Map<String, Object> setCdataItemMap(String type, Object id) {
+		Map<String, Object> map = new HashMap<>();
+		map.put("type", type);
+		map.put("id", id);
+		return map;
 	}
 	
 	/* Not in use */
