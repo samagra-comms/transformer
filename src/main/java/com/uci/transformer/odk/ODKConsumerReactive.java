@@ -646,8 +646,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 String currentXPath) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
         
-        UUID userID = !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != null && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
-        log.info("User uuid:"+userID);      
+        UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
+        log.info("User uuid:"+userID);
 
         Assessment assessment = Assessment.builder()
                 .question(question)
