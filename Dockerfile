@@ -17,8 +17,8 @@ RUN echo $token
 COPY /settings.xml $HOME/settings.xml 
 
 # replace username & token in settings file
-RUN sed -i "s/GITHUB_USERNAME/$username/g" $HOME/settings.xml
-RUN sed -i "s/GITHUB_TOKEN/$token/g" $HOME/settings.xml
+RUN sed -i "s/GH_USERNAME/$username/g" $HOME/settings.xml
+RUN sed -i "s/GH_TOKEN/$token/g" $HOME/settings.xml
 RUN cat $HOME/settings.xml
 
 # Maven package build
