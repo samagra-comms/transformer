@@ -5,18 +5,18 @@
     <servers>
         <server>
             <id>github</id>
-            <username>USERNAME</username>
-            <password>TOKEN</password>
+            <username>GITHUB_USERNAME</username>
+            <password>GITHUB_TOKEN</password>
         </server>
         <server>
             <id>github-utils</id>
-            <username>USERNAME</username>
-            <password>TOKEN</password>
+            <username>GITHUB_USERNAME</username>
+            <password>GITHUB_TOKEN</password>
         </server>
         <server>
             <id>github-message-rosa</id>
-            <username>USERNAME</username>
-            <password>TOKEN</password>
+            <username>GITHUB_USERNAME</username>
+            <password>GITHUB_TOKEN</password>
         </server>
     </servers>
 </settings>
