@@ -19,32 +19,17 @@
 		<java.version>11</java.version>
 	</properties>
 
+	<!-- For Downloading repositories from github packages -->
 	<repositories>
 		<repository>
-			<id>jcenter</id>
-			<url>https://jcenter.bintray.com </url>
-		</repository>
-		<repository>
-			<id>github-message-rosa-package</id>
-			<name>Github Message Rosa Package</name>
-			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
-			<snapshots>
-				<enabled>true</enabled>
-			</snapshots>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
-		</repository>
-		<repository>
-			<id>github-utils-package</id>
-			<name>Github Utils Package</name>
+			<id>github-utils</id>
+			<name>GitHub Packages</name>
 			<url>https://maven.pkg.github.com/samagra-comms/utils</url>
-			<snapshots>
-				<enabled>true</enabled>
-			</snapshots>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
+		</repository>
+		<repository>
+			<id>github-message-rosa</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
 		</repository>
 	</repositories>
 
@@ -157,7 +142,7 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>utils</artifactId>
-			<version>1.0.0</version>
+			<version>0.0.3</version>
 		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->

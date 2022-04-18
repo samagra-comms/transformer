@@ -4,14 +4,19 @@
                       http://maven.apache.org/xsd/settings-1.0.0.xsd">
     <servers>
         <server>
-            <id>github-message-rosa-package</id>
-            <username>surabhi-mahawar</username>
-            <password>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</password>
+            <id>github</id>
+            <username>USERNAME</username>
+            <password>TOKEN</password>
         </server>
         <server>
-            <id>github-utils-package</id>
-            <username>surabhi-mahawar</username>
-            <password>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</password>
+            <id>github-utils</id>
+            <username>USERNAME</username>
+            <password>TOKEN</password>
+        </server>
+        <server>
+            <id>github-message-rosa</id>
+            <username>USERNAME</username>
+            <password>TOKEN</password>
         </server>
     </servers>
 </settings>
