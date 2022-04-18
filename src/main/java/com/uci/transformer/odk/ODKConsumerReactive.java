@@ -82,9 +82,6 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${outbound}")
     public String outboundTopic;
 
-    @Value("${processOutbound}")
-    private String processOutboundTopic;
-
     @Value("${telemetry}")
     public String telemetryTopic;
 
@@ -144,7 +141,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         messages = (ArrayList<XMessage>) messages;
                                         for (XMessage msg : messages) {
                                             try {
-                                                kafkaProducer.send(processOutboundTopic, msg.toXML());
+                                                kafkaProducer.send(outboundTopic, msg.toXML());
                                             } catch (JAXBException e) {
                                                 e.printStackTrace();
                                             }
@@ -159,7 +156,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 logTimeTaken(startTime, 2);
                                                 if (transformedMessage != null) {
                                                     try {
-                                                        kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
+                                                        kafkaProducer.send(outboundTopic, transformedMessage.toXML());
                                                         long endTime = System.nanoTime();
                                                         long duration = (endTime - startTime);
                                                         log.error("Total time spent in processing form: " + duration / 1000000);
