@@ -170,76 +170,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                 }).subscribe();
 
     }
-
-    @Override
-    public Mono<List<XMessage>> transformToMany(XMessage xMessage) {
-        ArrayList list = new ArrayList();
-        list.add(xMessage);
-        return Mono.just(list);
-//        ArrayList<XMessage> messages = new ArrayList<>();
-//
-//        // Get All Users with Data.
-//        return campaignService.getCampaignFromNameTransformer(xMessage.getCampaign()).map(new Function<JsonNode, List<XMessage>>() {
-//            @Override
-//            public List<XMessage> apply(JsonNode campaign) {
-//                String campaignID = campaign.get("id").asText();
-//                JSONArray users = userService.getUsersFromFederatedServers(campaignID);
-//                String formID = getFormID(campaign);
-//                String formPath = getFormPath(formID);
-//                JsonNode firstTransformer = campaign.findValues("transformers").get(0).get(0);
-//                ArrayNode hiddenFields = (ArrayNode) firstTransformer.findValue("hiddenFields");
-//
-//                for (int i = 34; i < users.length(); i++) {
-//                    String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-//                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, null).start();
-//                    FormUpdation ss = FormUpdation.builder().applicationID(campaignID).phone(userPhone).build();
-//                    ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-//                    ss.parse(response.currentResponseState);
-//                    String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-//                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, null);
-//                    response = mm.start();
-//
-//                    // Create new xMessage from response
-//                    XMessage x = getMessageFromResponse(xMessage, response);
-//                    XMessage nextMessage = getClone(x);
-//
-//                    // Update user info
-//                    SenderReceiverInfo to = nextMessage.getTo();
-//                    to.setUserID(userPhone);
-//                    nextMessage.setTo(to);
-//
-//                    nextMessage.setMessageState(NOT_SENT);
-//                    nextMessage.setMessageType(HSM);
-//
-//                    // Update database with new fields.
-//                    appendNewResponse(formID, nextMessage, response);
-//                    replaceUserState(formID, nextMessage, response);
-//                    messages.add(nextMessage);
-//                }
-//                return messages;
-//            }
-//        });
-
-    }
-
-    private Map<String, String> getCampaignAndFormIdFromXMessage(XMessage xMessage) {
-    	Map<String, String> result = new HashMap<String, String>();
-    	String campaignID = "";
-    	String formID = "";
-    	if(xMessage.getTransformers() != null && xMessage.getTransformers().size() > 0) {
-    		Transformer t = xMessage.getTransformers().get(0);
-    		if(!t.getMetaData().isEmpty()) {
-    			Map<String, String> metaData = (Map<String, String>) t.getMetaData();
-        		formID = (String) metaData.get("currentFormID");
-        		campaignID = (String) metaData.get("campaignID");
-    		}
-    	}
-    	
-    	result.put("formID", formID);
-    	result.put("campaignID", campaignID);
-    	
-    	return result;
-    }
     
     @Override
     public Mono<XMessage> transform(XMessage xMessage) throws Exception {
@@ -249,9 +179,6 @@ public class ODKConsumerReactive extends TransformerProvider {
         Transformer transformer = transformers.get(0);
 
         log.info("1 To User ID:"+xMessage.getTo().getUserID());
-//                        	Map<String, String> data = getCampaignAndFormIdFromXMessage(xMessage);
-//
-//                            String formID = data.get("formID");
         String formID = ODKConsumerReactive.this.getTransformerMetaDataValue(transformer, "formID");
 
         if (formID.equals("")) {
@@ -278,14 +205,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                         Boolean prefilled;
                         String answer;
                         if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
-//                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                             previousMeta.currentAnswer = assesGoToStartChar;
                             ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo, null).start();
                             FormUpdation ss = FormUpdation.builder().build();
                             ss.parse(serviceResponse.currentResponseState);
                             ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-//                                                String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-//                                                        ss.getXML();
                             prefilled = true;
                             instanceXMlPrevious = ss.getXML();
                             answer = null;
@@ -348,8 +272,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                                     FormUpdation ss = FormUpdation.builder().build();
                                     ss.parse(serviceResponse.currentResponseState);
                                     ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-//                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-//                                                                ss.getXML();
                                     String instanceXMlPrevious = ss.getXML();
                                     log.debug("Instance value >> " + instanceXMlPrevious);
                                     MenuManager mm2 = new MenuManager(null, null,
@@ -387,100 +309,6 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Boolean isEndOfForm(String xPath) {
     	log.info("xPath for isEndOfForm check: "+xPath);
     	return xPath.contains("endOfForm") || xPath.contains("eof");
-    }
-    
-    /**
-     * Get current form id set in file for user & campaign 
-     * 
-     * @param userID
-     * @param campaignID
-     * @return
-     */
-    private String getCurrentFormIDFromFile(String userID, String campaignID) {
-    	String currentFormID = "";
-    	try {
-    		File file = getCurrentUserJsonFile();
-        	InputStream inputStream = new FileInputStream(file);
-        	byte[] bdata = FileCopyUtils.copyToByteArray(inputStream);
-            
-        	ObjectMapper mapper = new ObjectMapper();
-        	JsonNode rootNode = mapper.readTree(bdata);
-            log.info("UserCurrentForm file data node:"+rootNode);
-            
-            if(!rootNode.isEmpty() && rootNode.get(userID) != null 
-            		&& rootNode.path(userID).get(campaignID) != null) {
-            	currentFormID = rootNode.path(userID).get(campaignID).asText();
-            }
-        } catch (IOException e) {
-        	log.error("Error in getCurrentFormIDFromFile:"+e.getMessage());
-        }
-        return currentFormID;
-    }
-    
-    /**
-     * Save current form id in file for user & campaign
-     * 
-     * @param userID
-     * @param campaignID
-     * @param currentFormID
-     */
-    private void saveCurrentFormIDInFile(String userID, String campaignID, String currentFormID) {
-    	try {
-    		File file = getCurrentUserJsonFile();
-        	InputStream inputStream = new FileInputStream(file);
-        	byte[] bdata = FileCopyUtils.copyToByteArray(inputStream);
-            
-        	ObjectMapper mapper = new ObjectMapper();
-            JsonNode rootNode = mapper.readTree(bdata);
-        	
-            if(rootNode.isEmpty()) {
-            	rootNode = mapper.createObjectNode();
-            }
-            
-            if(rootNode != null && !rootNode.isEmpty() && rootNode.get(userID) != null) {
-            	((ObjectNode) rootNode.path(userID)).put(campaignID, currentFormID);
-        	} else {
-            	JsonNode campaignNode = mapper.createObjectNode();
-            	((ObjectNode) campaignNode).put(campaignID, currentFormID);
-            	
-            	((ObjectNode) rootNode).put(userID, campaignNode);
-            }
-              
-            log.info("Data saved in userCurrentForm file:"+rootNode.toString());
-            
-            FileWriter fileWriter = new FileWriter(file);
-            fileWriter.write(rootNode.toString());
-            fileWriter.close();
-        } catch (IOException e) {
-        	log.error("Error in saveCurrentFormIDInFile:"+e.getMessage());
-        }
-    }
-	
-    /**
-	 * Get Current User Json File to get, if not exists create one
-	 * 
-	 * @return File
-	 */
-	private File getCurrentUserJsonFile() {
-		try {
-			File file = new File(getCurrentUserJsonFilePath());
-	    	if(!file.exists()) {
-	    		file.createNewFile();
-	    	}
-	    	return file;
-		} catch (IOException e) {
-			log.error("Error in getCurrentUserJsonFile:"+e.getMessage());
-		}
-		return null;
-	}
-    
-	/**
-	 * Get Path to userCurrentForm file 
-	 * 
-	 * @return String
-	 */
-    private String getCurrentUserJsonFilePath() {
-    	return "src/main/resources/userCurrentForm.json";
     }
 
     private Mono<FormManagerParams> getPreviousMetadata(XMessage message, String formID) {
@@ -695,6 +523,12 @@ public class ODKConsumerReactive extends TransformerProvider {
         return response.getCurrentIndex().equals("endOfForm") || response.currentIndex.contains("eof");
     }
 
+    /**
+     * Get Meta data value by key in a transformer
+     * @param transformer
+     * @param key
+     * @return meta data value
+     */
     private String getTransformerMetaDataValue(Transformer transformer, String key) {
         Map<String, String> metaData = transformer.getMetaData();
         if(metaData.get(key) != null && !metaData.get(key).toString().isEmpty()) {
@@ -702,14 +536,6 @@ public class ODKConsumerReactive extends TransformerProvider {
         }
         return "";
     }
-
-//    private String getFormID(JsonNode campaign) {
-//        try {
-//        	return campaign.findValue("formID").asText();
-//        } catch (Exception e) {
-//            return "";
-//        }
-//    }
 
     @Nullable
     private XMessage getClone(XMessage nextMessage) {
