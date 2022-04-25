@@ -7,12 +7,16 @@ import org.joda.time.DateTime;
 import org.joda.time.Days;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Calendar;
 
 @Builder
 public class LeaveManager {
     User user;
+
+    @Autowired
+    UserService userService;
 
     public int getCurrentLeaves() {
         return (int) user.data.get("currentLeaves");
@@ -77,7 +81,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", accruedLeaves + previousLeaves - workingDays);
         user.data.put("leavesAvailable", Math.round(accruedLeaves + previousLeaves) - workingDays);
 
-        UserService.update(user);
+        userService.update(user);
 
     }
 
@@ -90,7 +94,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", existingLeaves + workingDays);
         user.data.put("leavesAvailable", Math.round(existingLeaves + workingDays));
 
-       return UserService.update(user);
+       return userService.update(user);
 
     }
 
@@ -103,7 +107,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", existingLeaves - workingDays);
         user.data.put("leavesAvailable", Math.round(existingLeaves - workingDays));
 
-        return UserService.update(user);
+        return userService.update(user);
     }
 
     private double getExistingLeaves() {

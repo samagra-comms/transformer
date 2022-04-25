@@ -7,6 +7,7 @@ import lombok.*;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +23,9 @@ public class SamagraOrgForm {
     User engagementOwner;
     User manager;
     User programCoordinator;
+
+    @Autowired
+    UserService userService;
 
     public void init() {
         getEngagementOwner();
@@ -54,12 +58,12 @@ public class SamagraOrgForm {
 
     public User getEngagementOwner() {
         if (this.engagementOwner == null) {
-            Boolean isAssociate = UserService.isAssociate(this.user);
-            String programConstruct = UserService.getProgramConstruct(this.user);
+            Boolean isAssociate = userService.isAssociate(this.user);
+            String programConstruct = userService.getProgramConstruct(this.user);
             if (isAssociate && programConstruct.equals("2")){
-                this.engagementOwner = UserService.getManager(this.user);
+                this.engagementOwner = userService.getManager(this.user);
             }else{
-                this.engagementOwner = UserService.getEngagementOwner(this.user);
+                this.engagementOwner = userService.getEngagementOwner(this.user);
             }
         }
         return this.engagementOwner;
@@ -75,12 +79,12 @@ public class SamagraOrgForm {
 
     public User getManager() {
         if (this.manager == null) {
-            Boolean isAssociate = UserService.isAssociate(this.user);
-            String programConstruct = UserService.getProgramConstruct(this.user);
+            Boolean isAssociate = userService.isAssociate(this.user);
+            String programConstruct = userService.getProgramConstruct(this.user);
             if (isAssociate && programConstruct.equals("2")){
-                this.manager = UserService.getProgramCoordinator(this.user);
+                this.manager = userService.getProgramCoordinator(this.user);
             }else{
-                this.manager = UserService.getManager(this.user);
+                this.manager = userService.getManager(this.user);
             }
         }
 
