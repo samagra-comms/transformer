@@ -51,8 +51,11 @@ public class TransformerApplication {
 
     @PostConstruct
     private void postConstruct() {
-        downloadForms();
-        // testFormManager();
+    	String downloadFormsFlag = System.getenv("DOWNLOAD_TRANSFORMER_FORMS");
+        if(!(downloadFormsFlag != null && downloadFormsFlag.equalsIgnoreCase("False"))) {
+        	downloadForms();        	
+        }
+    	// testFormManager();
     }
 
     private void testFormManager() {

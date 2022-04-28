@@ -1,6 +1,6 @@
 package com.uci.transformer.samagra;
 
-import com.uci.transformer.User.UserService;
+import com.uci.utils.service.UserService;
 import com.thoughtworks.xstream.XStream;
 import io.fusionauth.domain.User;
 import lombok.*;

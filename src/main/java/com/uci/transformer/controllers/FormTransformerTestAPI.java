@@ -99,7 +99,7 @@ public class FormTransformerTestAPI {
         log.info("InstanceCurrentXML" + instanceXMlPrevious);
         log.info("botFormName" +  botFormName);
         String formPath = ODKConsumerReactive.getFormPath(botFormName);
-        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName).start();
+        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName, null).start();
         System.out.println(serviceResponse.getCurrentResponseState());
         return serviceResponse;
     }

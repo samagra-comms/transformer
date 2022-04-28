@@ -1,5 +1,6 @@
 package com.uci.transformer.odk;
 
+import java.util.Arrays;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
 import com.uci.transformer.odk.repository.QuestionRepository;
@@ -7,6 +8,8 @@ import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
 import messagerosa.core.model.ButtonChoice;
+import messagerosa.core.model.MediaCategory;
+import messagerosa.core.model.StylingTag;
 import messagerosa.core.model.XMessagePayload;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
@@ -23,6 +26,7 @@ import org.javarosa.core.model.instance.utils.DefaultAnswerResolver;
 import org.javarosa.core.services.transport.payload.ByteArrayPayload;
 import org.javarosa.form.api.FormEntryController;
 import org.javarosa.form.api.FormEntryModel;
+import org.javarosa.form.api.FormEntryPrompt;
 import org.javarosa.model.xform.XFormSerializingVisitor;
 import org.javarosa.model.xform.XFormsModule;
 import org.javarosa.xform.parse.XFormParser;
@@ -70,8 +74,10 @@ public class MenuManager {
     String assesGoToStartChar;
     String assesOneLevelUpChar;
     Integer formDepth;
+    String stylingTag;
+    XMessagePayload payload;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -79,11 +85,12 @@ public class MenuManager {
         this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
+        this.payload = payload;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, Boolean isPrefilled, QuestionRepository questionRepo) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, Boolean isPrefilled, QuestionRepository questionRepo, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -92,6 +99,7 @@ public class MenuManager {
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
+        this.payload = payload;
         
         setAssesmentCharacters();
     }
@@ -299,6 +307,57 @@ public class MenuManager {
 		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
     }
     
+    /**
+     * Get Question XMessage Payload with text & button choices from question xPath
+     * 
+     * @return XMessagePayload
+     */
+    public XMessagePayload getQuestionPayloadFromXPath(String xpathStr) {
+    	new XFormsModule().registerModule();
+        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        formController = fecWrapper.controller;
+        
+        /* Previous Question */
+        ArrayList<ButtonChoice> choices = new ArrayList();
+        choices = getChoices(choices);
+        String questionText = renderQuestion(formController);
+        
+        XMessagePayload payload = XMessagePayload.builder()
+        								.text(questionText)
+        								.buttonChoices(choices)
+        								.build();
+        
+        try {
+        	if(formController.getModel().getQuestionPrompt().getBindAttributes() != null) {
+        		payload = getPayloadWithBindTags(payload, formController.getModel().getQuestionPrompt().getBindAttributes());
+            }
+        } catch (Exception e) {
+        	log.info("Exception in getQuestionPayloadFromXPath for bind attributes: "+e.getMessage());
+        }
+        
+        return payload;
+    }
+    
+    /**
+     * Get Question Object with xPath
+     * 
+     * @return Question
+     */
+    public Question getQuestionFromXPath(String xpathStr) {
+    	new XFormsModule().registerModule();
+        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        formController = fecWrapper.controller;
+        
+    	String formVersion = formController.getModel().getForm().getInstance().formVersion;
+        Question question = new Question();
+        question.setQuestionType(Question.QuestionType.STRING);
+        question.setFormID(formID);
+        question.setFormVersion(formVersion);
+        question.setXPath(xpathStr);
+        
+        return question;
+    }
+    
     private boolean isDynamicQuestion() {
         try {
             return formController.getModel().getEvent() == 4 &&
@@ -335,7 +394,10 @@ public class MenuManager {
         if (value != null) {
             // Works with name but you get Label
             try {
-                if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
+            	log.info("Question control type: "+formController.getModel().getQuestionPrompt().getControlType()
+            			+", control datatype: "+formController.getModel().getQuestionPrompt().getDataType()
+            			+", for xpath: "+this.xpath);
+            	if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
                     List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     boolean found = false;
                     if (items != null) {
@@ -367,6 +429,75 @@ public class MenuManager {
                                 }
                             }
                         }
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_IMAGE_CHOOSE) { 
+                	 TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                     try {
+                    	 if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                     			&& this.payload.getMedia().getCategory() != null 
+                     			&& this.payload.getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+                    		 IAnswerData answerData = new StringData(value);
+                             saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	 }
+                     } catch (Exception e) {
+                        log.severe("Exception in addResponseToForm for image type.");
+                        e.printStackTrace();
+                     }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_AUDIO_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.AUDIO)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for audio type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_VIDEO_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.VIDEO)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for video type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_FILE_CAPTURE) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	log.info("category: "+this.payload.getMedia().getCategory());
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
+                    			&& this.payload.getMedia().getCategory().equals(MediaCategory.FILE)) {
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for file type.");
+                       e.printStackTrace();
+                    }
+                } else if(formController.getModel().getQuestionPrompt().getDataType() == Constants.DATATYPE_GEOPOINT) { 
+                	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
+                    try {
+                    	if(this.payload != null && this.payload.getLocation() != null) {
+                    		log.info("location found with value: "+value);
+                   		 	IAnswerData answerData = new StringData(value);
+                   		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
+                    	}
+                    } catch (Exception e) {
+                       log.severe("Exception in addResponseToForm for video type.");
+                       e.printStackTrace();
                     }
                 } else {
                     try {
@@ -582,8 +713,12 @@ public class MenuManager {
     private String renderQuestion(FormEntryController formController) {
         try {
             System.out.println("test");
-            return "" + cleanText(getQuestionText(formController)) + "" + " \n" +
-                    "_" + cleanText(getHelpText(formController)) + "_" + " \n\n";
+            if(cleanText(getHelpText(formController)).equals("")){
+                return "" + cleanText(getQuestionText(formController)) + "" + " \n\n";
+            }else{
+                return "" + cleanText(getQuestionText(formController)) + "" + " \n" +
+                        "_" + cleanText(getHelpText(formController)) + "_" + " \n\n";
+            }
             //return "*" + cleanText(getQuestionText(formController)) + "*" + " \n" + "_" + cleanText(getHelpText(formController)) + "_" + " \n\n";
         } catch (Exception e) {
             return "";
@@ -630,7 +765,7 @@ public class MenuManager {
                 ArrayList<ButtonChoice> choices = new ArrayList<>();
                 try {
                     if (formController.getModel().getEvent() == FormEntryController.EVENT_REPEAT) {
-                        formController.stepToNextEvent();
+//                        formController.stepToNextEvent();
                         return createView(formController.stepToNextEvent(), previousPrompt);
                     }
                     if (formController.getModel().getEvent() == FormEntryController.EVENT_GROUP) {
@@ -641,12 +776,15 @@ public class MenuManager {
                         previousPrompt = renderQuestion(formController);
                         return createView(formController.stepToNextEvent(), previousPrompt);
                     }
-
-//                    log.info("Data type: " + formController.getModel().getQuestionPrompt().getDataType());
-                    choices = getChoices(choices);
+                    
+                	choices = getChoices(choices);
+                    
                     //Check this
-                    return XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build();
+                    return getPayloadWithBindTags(
+                    		XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build(), 
+                    		formController.getModel().getQuestionPrompt().getBindAttributes());
                 } catch (Exception e) {
+                	e.printStackTrace();
                     log.info("Non Question data type");
                     formController.stepToNextEvent();
                     String currentQuestionString = renderQuestion(formController);
@@ -688,8 +826,49 @@ public class MenuManager {
             }
         } catch (Exception e) {
         }
-        return buttonChoices;
+        return getQuestionsChoiceWithKey(buttonChoices);
     }
+    
+    /**
+	 * Get Question Choices with correct key
+	 * @param questionChoices
+	 * @return
+	 */
+	private ArrayList<ButtonChoice> getQuestionsChoiceWithKey(ArrayList<ButtonChoice> questionChoices) {
+		if(questionChoices != null) {
+			try {
+				questionChoices.forEach(choice -> {
+					try {
+						String[] a = choice.getText().split(" ");
+						if(a[0] != null && !a[0].isEmpty()) {
+							Integer.parseInt(a[0]);
+					        choice.setKey(a[0].toString());
+			    		}
+					} catch (NumberFormatException ex) {
+						String[] b = choice.getText().split(".");
+			    		try {
+			    			if(b[0] != null && !b[0].isEmpty()) {
+				    		    Integer.parseInt(b[0]);
+				    		    choice.setKey(b[0].toString());
+			    			}
+			    		} catch (NumberFormatException exc) {
+			    			// do nothing
+			    		} catch (ArrayIndexOutOfBoundsException exc) {
+			    			// do nothing
+			    		}
+					} catch (ArrayIndexOutOfBoundsException ex) {
+						// do nothing
+					} catch (Exception ex) {
+						log.info("Exception in getQuestionsChoiceWithKey-2: "+ex.getMessage());
+					}
+				});
+			} catch (Exception e) {
+				log.info("Exception in getQuestionsChoiceWithKey: "+e.getMessage());
+			}
+			
+		}
+		return questionChoices;
+	}
 
     private XMessagePayload createViewForFormEnd(FormEntryController formController) {
 
@@ -818,5 +997,41 @@ public class MenuManager {
             }
         }
         return new FECWrapper(fec, usedSavepoint);
+    }
+    
+    /**
+     * Get XMessage payload with bind attributes added to it
+     * 
+     * @param payload
+     * @param bindAttributes
+     * @return XMessagePayload
+     */
+    private XMessagePayload getPayloadWithBindTags(XMessagePayload payload, List<TreeElement> bindAttributes) {
+    	log.info("Bind Attributes: "+bindAttributes);
+    	try {
+    		bindAttributes.forEach(attribute -> {
+        		if(attribute.getName().equals("stylingTags")) {
+        			String tagText = attribute.getAttributeValue().toString();
+        			StylingTag tag = StylingTag.getEnumByText(tagText);
+        			if(tag != null) {
+        				payload.setStylingTag(tag);
+        			}
+        		} else if(attribute.getName().equals("flow")) {
+        			payload.setFlow(attribute.getAttributeValue().toString());
+        		} else if(attribute.getName().equals("index")) {
+        			try {
+        				payload.setQuestionIndex(Integer.parseInt(attribute.getAttributeValue()));
+        			} catch (IllegalArgumentException e) {
+        				log.info("Exception in getPayloadWithBindTags for parse int: "+e.getMessage());
+        			}
+        		} else if(attribute.getName().equals("caption")) {
+        			payload.setMediaCaption(attribute.getAttributeValue().toString());
+        		} 
+        	});
+    	} catch (Exception e) {
+    		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
+    	}
+    	
+    	return payload;
     }
 }
