@@ -13,10 +13,7 @@ import com.uci.utils.cache.service.RedisCacheService;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
-import messagerosa.core.model.ButtonChoice;
-import messagerosa.core.model.MediaCategory;
-import messagerosa.core.model.StylingTag;
-import messagerosa.core.model.XMessagePayload;
+import messagerosa.core.model.*;
 import reactor.core.publisher.Flux;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
@@ -79,7 +76,7 @@ public class MenuManager {
     String formPath;
     String initialInstanceXML;
     String formID;
-    Boolean isSpecialResponse;
+    Boolean isSpecialResponse = false;
     Boolean isPrefilled;
     QuestionRepository questionRepo;
     String assesGoToStartChar;
@@ -89,19 +86,18 @@ public class MenuManager {
     boolean shouldUpdateFormXML = false;
     Integer formDepth;
     String stylingTag;
-    XMessagePayload payload;
     String flow;
     Integer questionIndex;
     RedisCacheService redisCacheService;
     String userID;
-    String appID;
+    String appID = null;
+    XMessagePayload payload = null;
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
         this.formPath = formPath;
-        this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
         this.redisCacheService = redisCacheService;
@@ -116,7 +112,6 @@ public class MenuManager {
         this.answer = answer;
         this.instanceXML = instanceXML;
         this.formPath = formPath;
-        this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
         this.user = user;
@@ -135,7 +130,6 @@ public class MenuManager {
         this.answer = answer;
         this.instanceXML = instanceXML;
         this.formPath = formPath;
-        this.isSpecialResponse = false;
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
@@ -149,13 +143,12 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID,
-                       String appID, XMessagePayload payload) {
+                       boolean shouldUpdateFormXML, JSONObject campaign,
+                       RedisCacheService redisCacheService, XMessage xMessage) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
         this.formPath = formPath;
-        this.isSpecialResponse = false;
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
@@ -163,10 +156,12 @@ public class MenuManager {
         this.shouldUpdateFormXML = shouldUpdateFormXML;
         this.campaign = campaign;
         this.redisCacheService = redisCacheService;
-        this.userID = userID;
-        this.appID = appID;
-        this.payload = payload;
-        
+        if(xMessage != null) {
+            this.userID = xMessage.getTo().getUserID();
+            this.appID = xMessage.getApp();
+            this.payload = xMessage.getPayload();
+        }
+
         setAssesmentCharacters();
     }
     
@@ -1108,9 +1103,9 @@ public class MenuManager {
                             }
                         	
                         }
-//                        if(options.size() > 0) {
+                        if(options.size() > 0) {
                         	ss.addSelectOneOptions(options, "vacancies");
-//                        }
+                        }
                     }
 //                    log.info("Form XML :" +ss.getXML());
                 } catch(Exception e) {

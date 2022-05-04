@@ -329,74 +329,44 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             }
                                             JsonNode firstTransformer = campaign.findValues("transformers").get(0).get(0);
                                             ArrayNode hiddenFields = (ArrayNode) firstTransformer.findValue("hiddenFields");
-                                            
+
+                                            String xpath = null;
                                             String instanceXMlPrevious = "";
-                                            Boolean prefilled;
-                                            String answer;
+                                            Boolean prefilled = false;
+                                            String answer = null;
+                                            Boolean shouldUpdateFormXML = false;
                                             if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
 //                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
                                                 ServiceResponse serviceResponse = new MenuManager(null,
                                                         null, null, formPath, formID, false,
-                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null).start();
-                                                FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
-                                                ss.parse(serviceResponse.currentResponseState);
-                                                ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-                                                ss.updateParams("phone_number", xMessage.getTo().getUserID());
-                                                instanceXMlPrevious = ss.updateHiddenFields(hiddenFields, (JSONObject) user).getXML();
-                                                prefilled = false;
-                                            	answer = null;
-                                            	log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
+                                                        questionRepo, null, false, null,
+                                                        redisCacheService, xMessage).start();
+                                                instanceXMlPrevious = getUpdatedInstanceXML(previousMeta, true, serviceResponse, xMessage, hiddenFields, user);
+                                                log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                             			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
-                                            	mm = new MenuManager(null, null, instanceXMlPrevious,
-                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
-                                                response[0] = mm.start();
                                             } else {
-                                                FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
+                                                xpath = previousMeta.previousPath;
+                                                answer = previousMeta.currentAnswer;
+                                                shouldUpdateFormXML = true;
                                                 if(previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")){
-                                                    ss.parse(previousMeta.instanceXMlPrevious);
-                                                    ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-
-                                                    JSONObject vacancyDetails = null;
-                                                    for(int j=0; j<user.getJSONArray("matched").length(); j++){
-                                                        String vacancyID = String.valueOf(user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail").getInt("id"));
-                                                        if(previousMeta.currentAnswer.equals(vacancyID)){
-                                                            vacancyDetails = user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail");
-                                                        }
-                                                    }
-                                                    ss.updateHiddenFields(hiddenFields, user);
-                                                    int idToBeDeleted = -1;
-                                                    for (int i=0; i< hiddenFields.size(); i++){
-                                                        JsonNode object = hiddenFields.get(i);
-                                                        String userField = object.findValue("name").asText();
-                                                        if(userField.equals("candidate_id")){
-                                                            idToBeDeleted = i;
-                                                        }
-                                                    }
-                                                    if(idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
-                                                    instanceXMlPrevious = instanceXMlPrevious + ss.updateHiddenFields(hiddenFields, (JSONObject) vacancyDetails).getXML();
-                                                    prefilled = false;
-                                                    answer = previousMeta.currentAnswer;
+                                                    instanceXMlPrevious = getUpdatedInstanceXML(previousMeta, false, null, xMessage, hiddenFields, user);
                                                     log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
                                                 			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
-                                                    mm = new MenuManager(previousMeta.previousPath, answer,
-                                                            instanceXMlPrevious, formPath, formID,
-                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 }else{
-                                                	prefilled = false;
-                                                	answer = previousMeta.currentAnswer;
-                                                	instanceXMlPrevious = previousMeta.instanceXMlPrevious;
-                                                	log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
+                                                	instanceXMlPrevious = getUpdatedInstanceXML(previousMeta, false, null, xMessage, hiddenFields, user);
+                                                    log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
                                                 			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
                                                 			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
-                                                    mm = new MenuManager(previousMeta.previousPath, answer,
-                                                    		instanceXMlPrevious, formPath, formID,
-                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 }
-                                                response[0] = mm.start();
                                             }
-                                            
+
+                                            mm = new MenuManager(xpath, answer, instanceXMlPrevious, formPath, formID,
+                                                    prefilled, questionRepo, user, shouldUpdateFormXML, camp,
+                                                    redisCacheService, xMessage);
+                                            response[0] = mm.start();
+
                                             log.info("next question xpath:" + response[0].question.getXPath());
                                             
                                             /* To use with previous question & question payload methods */
@@ -487,6 +457,47 @@ public class ODKConsumerReactive extends TransformerProvider {
                         });
                     }
                 });
+    }
+
+    private String getUpdatedInstanceXML(FormManagerParams previousMeta, Boolean isStartingMessage,
+                                         ServiceResponse serviceResponse, XMessage xMessage, ArrayNode hiddenFields, JSONObject user) {
+        FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
+        String instanceXMlPrevious = "";
+        if(isStartingMessage) {
+            ss.parse(serviceResponse.currentResponseState);
+            ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
+            ss.updateParams("phone_number", xMessage.getTo().getUserID());
+            if(hiddenFields != null) {
+                ss.updateHiddenFields(hiddenFields, (JSONObject) user);
+            }
+            instanceXMlPrevious = ss.getXML();
+
+        } else if(!isStartingMessage && previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")) {
+            ss.parse(previousMeta.instanceXMlPrevious);
+            ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
+
+            JSONObject vacancyDetails = null;
+            for (int j = 0; j < user.getJSONArray("matched").length(); j++) {
+                String vacancyID = String.valueOf(user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail").getInt("id"));
+                if (previousMeta.currentAnswer.equals(vacancyID)) {
+                    vacancyDetails = user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail");
+                }
+            }
+            ss.updateHiddenFields(hiddenFields, user);
+            int idToBeDeleted = -1;
+            for (int i = 0; i < hiddenFields.size(); i++) {
+                JsonNode object = hiddenFields.get(i);
+                String userField = object.findValue("name").asText();
+                if (userField.equals("candidate_id")) {
+                    idToBeDeleted = i;
+                }
+            }
+            if (idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
+            instanceXMlPrevious = instanceXMlPrevious + ss.updateHiddenFields(hiddenFields, (JSONObject) vacancyDetails).getXML();
+        } else {
+            instanceXMlPrevious = previousMeta.instanceXMlPrevious;
+        }
+        return instanceXMlPrevious;
     }
     
     /**
@@ -713,7 +724,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 JsonNode campaign, XMessage xMessage, Question question) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
         
-        UUID userID = !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != null && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
+        UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
         log.info("User uuid:"+userID);      
 
         Assessment assessment = Assessment.builder()
