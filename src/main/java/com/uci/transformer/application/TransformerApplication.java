@@ -41,7 +41,7 @@ import java.util.Map;
 @EnableReactiveCassandraRepositories("com.uci.dao")
 @ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils"})
 @EnableR2dbcRepositories(basePackages = {"com.uci.transformer.odk.repository"})
-@EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.dao"})
+@EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.messagerosa", "com.uci.dao"})
 @SpringBootApplication
 @Slf4j
 public class TransformerApplication {
