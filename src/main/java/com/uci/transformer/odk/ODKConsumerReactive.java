@@ -317,11 +317,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             MenuManager mm;
                                             ObjectMapper mapper = new ObjectMapper();
                                             JSONObject camp = null;
-                                            JSONObject user = userService.getUserByPhoneFromFederatedServers(
-                                                    campaign.findValue("id").asText(),
-                                                    xMessage.getTo().getUserID()
-                                            );
-                                            log.info("Federated User by phone : "+user);
+                                            JSONObject user = null;
                                             try {
                                                 camp = new JSONObject(mapper.writeValueAsString(campaign));
                                             } catch (JsonProcessingException e) {
@@ -342,14 +338,31 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         null, null, formPath, formID, false,
                                                         questionRepo, null, false, null,
                                                         redisCacheService, xMessage).start();
+                                                /* If hidden fields exists, get user by phone from federated server */
+                                                if(hiddenFields != null) {
+                                                    user = userService.getUserByPhoneFromFederatedServers(
+                                                            campaign.findValue("id").asText(),
+                                                            xMessage.getTo().getUserID()
+                                                    );
+                                                    log.info("Federated User by phone : "+user);
+                                                }
                                                 instanceXMlPrevious = getUpdatedInstanceXML(previousMeta, true, serviceResponse, xMessage, hiddenFields, user);
                                                 log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                             			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
+
                                             } else {
                                                 xpath = previousMeta.previousPath;
                                                 answer = previousMeta.currentAnswer;
                                                 shouldUpdateFormXML = true;
                                                 if(previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")){
+                                                    /* If hidden fields exists, get user by phone from federated server */
+                                                    if(hiddenFields != null) {
+                                                        user = userService.getUserByPhoneFromFederatedServers(
+                                                                campaign.findValue("id").asText(),
+                                                                xMessage.getTo().getUserID()
+                                                        );
+                                                        log.info("Federated User by phone : "+user);
+                                                    }
                                                     instanceXMlPrevious = getUpdatedInstanceXML(previousMeta, false, null, xMessage, hiddenFields, user);
                                                     log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
                                                 			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled

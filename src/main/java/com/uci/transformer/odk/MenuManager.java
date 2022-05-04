@@ -1091,27 +1091,29 @@ public class MenuManager {
                 // Populate items - TODO fix this hardcoding with actual schema
                 try{
                     ArrayList<Item> options = new ArrayList<>();
-                    JSONArray matchedVacancies = this.user.getJSONArray("matched");
-                    log.info("matchedVacancies count: "+matchedVacancies.length());
-                    if(matchedVacancies.length() > 0){
-                        for(int i=0; i<matchedVacancies.length(); i++){
-                            try {
-                            	String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
-                                        " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
-                                String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
-                                log.info("vacancy label: "+label+", value: "+value);
-                                options.add(Item.builder().label(label).value(value).build());
-                            } catch (Exception ex) {
-                            	log.info("Exception in createFormDefFromCacheOrXml forloop: "+ex.getMessage());
-                            	ex.printStackTrace();
+                    if(this.user != null) {
+                        JSONArray matchedVacancies = this.user.getJSONArray("matched");
+                        log.info("matchedVacancies count: "+matchedVacancies.length());
+                        if(matchedVacancies.length() > 0){
+                            for(int i=0; i<matchedVacancies.length(); i++){
+                                try {
+                                    String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
+                                            " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
+                                    String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
+                                    log.info("vacancy label: "+label+", value: "+value);
+                                    options.add(Item.builder().label(label).value(value).build());
+                                } catch (Exception ex) {
+                                    log.info("Exception in createFormDefFromCacheOrXml forloop: "+ex.getMessage());
+                                    ex.printStackTrace();
+                                }
+
                             }
-                        	
+                            if(options.size() > 0) {
+                                ss.addSelectOneOptions(options, "vacancies");
+                            }
                         }
-                        if(options.size() > 0) {
-                        	ss.addSelectOneOptions(options, "vacancies");
-                        }
-                    }
 //                    log.info("Form XML :" +ss.getXML());
+                    }
                 } catch(Exception e) {
                 	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
                 	e.printStackTrace();
