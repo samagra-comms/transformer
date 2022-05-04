@@ -605,7 +605,8 @@ public class MenuManager {
                 } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_IMAGE_CHOOSE) { 
                 	 TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
                      try {
-                    	 if(this.payload != null && this.payload.getMedia() != null 
+                    	 if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
                      			&& this.payload.getMedia().getCategory() != null 
                      			&& this.payload.getMedia().getCategory().equals(MediaCategory.IMAGE)) {
                     		 IAnswerData answerData = new StringData(value);
@@ -618,8 +619,9 @@ public class MenuManager {
                 } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_AUDIO_CAPTURE) { 
                 	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
                     try {
-                    	if(this.payload != null && this.payload.getMedia() != null 
-                    			&& this.payload.getMedia().getCategory() != null 
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
                     			&& this.payload.getMedia().getCategory().equals(MediaCategory.AUDIO)) {
                    		 	IAnswerData answerData = new StringData(value);
                    		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
@@ -631,8 +633,9 @@ public class MenuManager {
                 } else if(formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_VIDEO_CAPTURE) { 
                 	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
                     try {
-                    	if(this.payload != null && this.payload.getMedia() != null 
-                    			&& this.payload.getMedia().getCategory() != null 
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
                     			&& this.payload.getMedia().getCategory().equals(MediaCategory.VIDEO)) {
                    		 	IAnswerData answerData = new StringData(value);
                    		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);
@@ -645,8 +648,9 @@ public class MenuManager {
                 	TreeElement t = formController.getModel().getForm().getMainInstance().resolveReference(formIndex.getReference());
                     try {
                     	log.info("category: "+this.payload.getMedia().getCategory());
-                    	if(this.payload != null && this.payload.getMedia() != null 
-                    			&& this.payload.getMedia().getCategory() != null 
+                    	if(this.payload != null && this.payload.getMedia() != null
+                                && this.payload.getMedia().getMessageMediaError() == null
+                                && this.payload.getMedia().getCategory() != null
                     			&& this.payload.getMedia().getCategory().equals(MediaCategory.FILE)) {
                    		 	IAnswerData answerData = new StringData(value);
                    		 	saveStatus = formController.answerQuestion(formIndex, answerData, true);

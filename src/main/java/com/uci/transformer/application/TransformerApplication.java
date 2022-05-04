@@ -44,7 +44,6 @@ import java.util.Map;
 @EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.dao"})
 @SpringBootApplication
 @Slf4j
-
 public class TransformerApplication {
 
     public static void main(String[] args) {
@@ -54,8 +53,11 @@ public class TransformerApplication {
 
     @PostConstruct
     private void postConstruct() {
-//        downloadForms();
-        // testFormManager();
+    	String downloadFormsFlag = System.getenv("DOWNLOAD_TRANSFORMER_FORMS");
+        if(!(downloadFormsFlag != null && downloadFormsFlag.equalsIgnoreCase("False"))) {
+        	downloadForms();        	
+        }
+    	// testFormManager();
     }
 
     private void testFormManager() {
