@@ -503,7 +503,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
    /**
      * Check if form has ended by xpath
-     * @param path
+     * @param xPath
      * @return
      */
     private Boolean isEndOfForm(String xPath) {
@@ -671,6 +671,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
+                                                                            JsonNode campaign, XMessage xMessage, Question question, Question prevQuestion, String currentXPath) {
         return previousQuestions
                 .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
                     @Override
@@ -731,6 +732,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     private Mono<Assessment> saveAssessmentData(Pair<Boolean, List<Question>> existingQuestionStatus,
                                                 String formID, FormManagerParams previousMeta,
+                                                JsonNode campaign, XMessage xMessage, Question question, String currentXPath) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
         
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
@@ -953,5 +955,9 @@ public class ODKConsumerReactive extends TransformerProvider {
         long endTime = System.nanoTime();
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
+    }
+
+    private String redisKeyWithPrefix(String key) {
+        return System.getenv("ENV")+"-"+key;
     }
 }
