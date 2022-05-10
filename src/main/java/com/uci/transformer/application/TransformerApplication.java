@@ -21,6 +21,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.cassandra.repository.config.EnableReactiveCassandraRepositories;
 import org.springframework.data.r2dbc.repository.config.EnableR2dbcRepositories;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -37,11 +38,13 @@ import java.util.Map;
 @EnableKafka
 @EnableAsync
 @EnableCaching
+@EnableReactiveCassandraRepositories("com.uci.dao")
 @ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils"})
 @EnableR2dbcRepositories(basePackages = {"com.uci.transformer.odk.repository"})
-@EntityScan(basePackages = {"com.uci.transformer.odk.entity"})
+@EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.dao"})
 @SpringBootApplication
 @Slf4j
+
 public class TransformerApplication {
 
     public static void main(String[] args) {

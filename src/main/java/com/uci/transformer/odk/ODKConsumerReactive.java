@@ -1,10 +1,15 @@
 package com.uci.transformer.odk;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Maps;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+import com.uci.dao.models.XMessageDAO;
+import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
@@ -18,9 +23,13 @@ import com.uci.transformer.odk.repository.MessageRepository;
 import com.uci.transformer.odk.repository.QuestionRepository;
 import com.uci.transformer.odk.repository.StateRepository;
 import com.uci.transformer.odk.utilities.FormUpdation;
+import com.uci.transformer.odk.utilities.FormInstanceUpdation;
 import com.uci.transformer.telemetry.AssessmentTelemetryBuilder;
 import com.uci.utils.CampaignService;
+import com.uci.utils.cache.service.RedisCacheService;
 import com.uci.utils.kafka.SimpleProducer;
+import com.uci.utils.telemetry.service.PosthogService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import messagerosa.core.model.ButtonChoice;
@@ -28,6 +37,7 @@ import messagerosa.core.model.LocationParams;
 import messagerosa.core.model.SenderReceiverInfo;
 import messagerosa.core.model.Transformer;
 import messagerosa.core.model.XMessage;
+import messagerosa.core.model.XMessage.MessageState;
 import messagerosa.core.model.XMessagePayload;
 import messagerosa.xml.XMessageParser;
 import org.apache.commons.lang3.tuple.Pair;
@@ -58,6 +68,9 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -99,6 +112,9 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     private MessageRepository msgRepo;
+    
+    @Autowired
+    XMessageRepository xMsgRepo;
 
     @Qualifier("custom")
     @Autowired
@@ -123,6 +139,12 @@ public class ODKConsumerReactive extends TransformerProvider {
     public MenuManager menuManager;
     
     public Boolean isStartingMessage;
+    
+    @Autowired
+    public PosthogService posthogService;
+    
+    @Autowired
+    public RedisCacheService redisCacheService;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -202,12 +224,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                 for (int i = 34; i < users.length(); i++) {
                     String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, null).start();
-                    FormUpdation ss = FormUpdation.builder().applicationID(campaignID).phone(userPhone).build();
+                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null).start();
+                    FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
                     ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                     ss.parse(response.currentResponseState);
                     String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, null);
+                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null);
                     response = mm.start();
 
                     // Create new xMessage from response
@@ -261,7 +283,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                     @Override
                     public Mono<Mono<Mono<XMessage>>> apply(JsonNode campaign) {
                         if (campaign != null) {
-                        	log.info("1 To User ID:"+xMessage.getTo().getUserID());
 //                        	Map<String, String> data = getCampaignAndFormIdFromXMessage(xMessage);
 //                        	
 //                            String formID = data.get("formID");
@@ -293,34 +314,92 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         public Mono<Mono<XMessage>> apply(FormManagerParams previousMeta) {
                                             final ServiceResponse[] response = new ServiceResponse[1];
                                             MenuManager mm;
-                                            String instanceXMlPrevious;
+                                            ObjectMapper mapper = new ObjectMapper();
+                                            JSONObject camp = null;
+                                            JSONObject user = userService.getUserByPhoneFromFederatedServers(
+                                                    campaign.findValue("id").asText(),
+                                                    xMessage.getTo().getUserID()
+                                            );
+                                            log.info("Federated User by phone : "+user);
+                                            try {
+                                                camp = new JSONObject(mapper.writeValueAsString(campaign));
+                                            } catch (JsonProcessingException e) {
+                                                e.printStackTrace();
+                                            }
+                                            JsonNode firstTransformer = campaign.findValues("transformers").get(0).get(0);
+                                            ArrayNode hiddenFields = (ArrayNode) firstTransformer.findValue("hiddenFields");
+                                            
+                                            String instanceXMlPrevious = "";
                                             Boolean prefilled;
                                             String answer;
                                             if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
 //                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                                             	previousMeta.currentAnswer = assesGoToStartChar;
-                                                ServiceResponse serviceResponse = new MenuManager(null, null, null, formPath, formID, false, questionRepo, null).start();
-                                                FormUpdation ss = FormUpdation.builder().build();
+                                                ServiceResponse serviceResponse = new MenuManager(null,
+                                                        null, null, formPath, formID, false,
+                                                        questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null).start();
+                                                FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                 ss.parse(serviceResponse.currentResponseState);
                                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-//                                                String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-//                                                        ss.getXML();
-                                                prefilled = true;
-                                                instanceXMlPrevious = ss.getXML();
-                                                answer = null;
-                                                log.debug("Instance value >> " + instanceXMlPrevious);
-                                                mm = new MenuManager(null, answer, instanceXMlPrevious, formPath, formID, prefilled, questionRepo, xMessage.getPayload());
+                                                ss.updateParams("phone_number", xMessage.getTo().getUserID());
+                                                instanceXMlPrevious = ss.updateHiddenFields(hiddenFields, (JSONObject) user).getXML();
+                                                prefilled = false;
+                                            	answer = null;
+                                            	log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
+                                            			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
+                                            	mm = new MenuManager(null, null, instanceXMlPrevious,
+                                                        formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
                                                 response[0] = mm.start();
                                             } else {
-                                            	prefilled = false;
-                                            	answer = previousMeta.currentAnswer;
-                                            	instanceXMlPrevious = previousMeta.instanceXMlPrevious;
-                                                mm = new MenuManager(previousMeta.previousPath, answer,
-                                                		instanceXMlPrevious, formPath, formID, prefilled, questionRepo, xMessage.getPayload());
+                                                FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
+                                                if(previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")){
+                                                    ss.parse(previousMeta.instanceXMlPrevious);
+                                                    ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
+
+                                                    JSONObject vacancyDetails = null;
+                                                    for(int j=0; j<user.getJSONArray("matched").length(); j++){
+                                                        String vacancyID = String.valueOf(user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail").getInt("id"));
+                                                        if(previousMeta.currentAnswer.equals(vacancyID)){
+                                                            vacancyDetails = user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail");
+                                                        }
+                                                    }
+                                                    ss.updateHiddenFields(hiddenFields, user);
+                                                    int idToBeDeleted = -1;
+                                                    for (int i=0; i< hiddenFields.size(); i++){
+                                                        JsonNode object = hiddenFields.get(i);
+                                                        String userField = object.findValue("name").asText();
+                                                        if(userField.equals("candidate_id")){
+                                                            idToBeDeleted = i;
+                                                        }
+                                                    }
+                                                    if(idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
+                                                    instanceXMlPrevious = instanceXMlPrevious + ss.updateHiddenFields(hiddenFields, (JSONObject) vacancyDetails).getXML();
+                                                    prefilled = false;
+                                                    answer = previousMeta.currentAnswer;
+                                                    log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
+                                                			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
+                                                			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
+                                                    mm = new MenuManager(previousMeta.previousPath, answer,
+                                                            instanceXMlPrevious, formPath, formID,
+                                                            prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
+                                                }else{
+                                                	prefilled = false;
+                                                	answer = previousMeta.currentAnswer;
+                                                	instanceXMlPrevious = previousMeta.instanceXMlPrevious;
+                                                	log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
+                                                			+instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
+                                                			+", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
+                                                    mm = new MenuManager(previousMeta.previousPath, answer,
+                                                    		instanceXMlPrevious, formPath, formID,
+                                                    		prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
+                                                }
                                                 response[0] = mm.start();
                                             }
                                             
+                                            log.info("next question xpath:" + response[0].question.getXPath());
+                                            
                                             /* To use with previous question & question payload methods */
+//                                            log.info("menu manager instanceXMlPrevious: "+instanceXMlPrevious);
                                             menuManager = mm;
                                             
                                             /* Previous Question Data */
@@ -362,9 +441,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         ServiceResponse serviceResponse = new MenuManager(
                                                                 null, null, null,
                                                                 getFormPath(nextFormID), nextFormID,
-                                                                false, questionRepo, null)
+                                                                false, questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null)
                                                                 .start();
-                                                        FormUpdation ss = FormUpdation.builder().build();
+                                                        FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                                         ss.parse(serviceResponse.currentResponseState);
                                                         ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
 //                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
@@ -373,7 +452,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                         log.debug("Instance value >> " + instanceXMlPrevious);
                                                         MenuManager mm2 = new MenuManager(null, null,
                                                                 instanceXMlPrevious, getFormPath(nextFormID), nextFormID, true,
-                                                                questionRepo, null);
+                                                                questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null);
                                                         ServiceResponse response = mm2.start();
                                                         xMessage.setApp(nextAppName);
                                                         return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
@@ -664,8 +743,51 @@ public class ODKConsumerReactive extends TransformerProvider {
             }
         	
         	if(question != null && !isStartingMessage) {
-        		
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
+        		
+                log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
+                
+                /* Get Previous question XMessage */
+                getLatestXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
+                    .subscribe(new Consumer<XMessageDAO>() {
+                        @Override
+                        public void accept(XMessageDAO xMsgDao) {
+                        	log.info("found xMsgDao");
+                        	
+                            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+                            
+                            /* local date time */
+                            LocalDateTime localNow = LocalDateTime.now();
+                            String current = fmt.format(localNow).toString();
+                            LocalDateTime currentDateTime = LocalDateTime.parse(current, fmt); 
+                            LocalDateTime timestamp = xMsgDao.getTimestamp();
+                            long diff_milis = ChronoUnit.MILLIS.between(timestamp, currentDateTime);
+                            long diff_secs = ChronoUnit.SECONDS.between(timestamp, currentDateTime);
+                            
+                            log.info(
+                            		"xMsgDao Id: "+xMsgDao.getId()+", userId: "+xMsgDao.getUserId()+", Timestamp: "+xMsgDao.getTimestamp()
+                            		+", XMessage stylingTag: "+questionPayload.getStylingTag()+", flow: "+questionPayload.getFlow()+", index: "+questionPayload.getQuestionIndex()
+                            		+", currentDateTime: "+currentDateTime+", timestamp: "+timestamp+", diff seconds: "+diff_secs+", diff millis: "+diff_milis);
+                            
+                            if(questionPayload.getFlow() != null 
+                            	&& !questionPayload.getFlow().isEmpty()
+                        		&& questionPayload.getQuestionIndex() != null) {
+                            	posthogService.sendDropOffEvent(
+                            			xMsgDao.getUserId(), questionPayload.getFlow().toString(), 
+                            			questionPayload.getQuestionIndex(), diff_milis)
+                            	.subscribe(new Consumer<String>() {
+									@Override
+									public void accept(String t) {
+										// TODO Auto-generated method stub
+										log.info("telemetry response: "+t);
+									}
+                            	});
+                            } else {
+                            	log.info("Posthog telemetry event not being sent for flow: "+questionPayload.getFlow()+", index: "+questionPayload.getQuestionIndex());
+                            }
+                        }
+                    });
+                
         		String telemetryEvent = new AssessmentTelemetryBuilder()
                         .build(campaign.findValue("ownerOrgID").asText(),
                                 xMessage.getChannel(),
@@ -700,6 +822,26 @@ public class ODKConsumerReactive extends TransformerProvider {
                         log.info("Assessment Saved by id: "+assessment.getId());
                     }
                 });
+    }
+    
+    private Flux<XMessageDAO> getLatestXMessage(String appName, String userID) {
+    	try {
+            XMessageDAO xMessageDAO = (XMessageDAO)redisCacheService.getXMessageDaoCache(userID);
+    	  	if(xMessageDAO != null) {
+    	  		log.info("redis key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
+    	  		log.info("Redis xMsgDao id: "+xMessageDAO.getId()+", dao app: "+xMessageDAO.getApp()
+    			+", From id: "+xMessageDAO.getFromId()+", user id: "+xMessageDAO.getUserId()
+    			+", xMessage: "+xMessageDAO.getXMessage()+", status: "+xMessageDAO.getMessageState()+
+    			", timestamp: "+xMessageDAO.getTimestamp());
+    	  		return Flux.just(xMessageDAO);
+    	  	} else {
+    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
+    	  	}
+    	} catch (Exception e) {
+    		log.error("Exception in redis data fetch: "+e.getMessage());   	
+    	}
+    	
+    	return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
     }
 
     private Mono<XMessage> decodeXMessage(XMessage xMessage, ServiceResponse response, String formID, Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment) {
@@ -803,5 +945,9 @@ public class ODKConsumerReactive extends TransformerProvider {
         long endTime = System.nanoTime();
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
+    }
+    
+    private String redisKeyWithPrefix(String key) {
+    	return System.getenv("ENV")+"-"+key;
     }
 }

@@ -1,110 +1,201 @@
 package com.uci.transformer.odk.utilities;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.jayway.jsonpath.JsonPath;
 import com.thoughtworks.xstream.XStream;
-import com.thoughtworks.xstream.io.xml.StaxDriver;
-import com.uci.transformer.samagra.MapEntryConverter;
+
+import android.util.Pair;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.json.JSONObject;
-import org.springframework.web.client.RestTemplate;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
-import java.text.ParseException;
-import java.util.HashMap;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.*;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import java.io.*;
+import java.util.ArrayList;
 import java.util.Map;
-import java.util.UUID;
 
-import static java.util.UUID.randomUUID;
-
-@Builder
-@Getter
-@Setter
 @Slf4j
+@Builder
 public class FormUpdation {
-    RestTemplate restTemplate;
-    String applicationID;
-    String phone;
-    Map<String, Object> instanceData;
+    String formPath;
+    Document instanceData;
+    private XStream magicApi;
+    File formXml;
+    static TransformerFactory transformerFactory = TransformerFactory.newInstance();
+    static Transformer transformer;
+    static StringWriter writer = new StringWriter();
+    static StreamResult sr = new StreamResult(writer);
+    static FileInputStream fis;
 
-    public FormUpdation updateAdapterProperties(String channel, String provider){
-        updateParams("channel", channel);
-        updateParams("provider", provider);
-        return this;
-    }
-
-    public FormUpdation updateHiddenFields(ArrayNode hiddenFields, JSONObject user) {
-    	UUID instanceID = randomUUID();
-        HashMap<String, String> fields = new HashMap<>();
-        for(int i=0; i<hiddenFields.size(); i++){
-            JsonNode object = hiddenFields.get(i);
-            String userField = JsonPath.parse(user.toString()).read("$." + object.findValue("path").asText(), String.class);
-            updateParams(object.findValue("name").asText(), userField);
-        }
-        fields.put("uuid", instanceID.toString());
-        return this;
-    }
-
-
-    public boolean hashMapper(Map<String, Object> stringObjectMap, String destinationKey, String destinationValue) throws ParseException {
-        boolean entryUpdated = false;
-        for (Map.Entry<String, Object> entry : stringObjectMap.entrySet()) {
-            String key = entry.getKey();
-            Object value = entry.getValue();
-            if (key.equals(destinationKey)) {
-                stringObjectMap.put(key, destinationValue);
-                return true;
-            }else if (value instanceof Map) {
-                Map<String, Object> subMap = (Map<String, Object>) value;
-                hashMapper(subMap, destinationKey, destinationValue);
-            }
-        }
-
-        return entryUpdated;
-    }
-
-    public void updateParams(String key, String value) {
+    static {
         try {
-           boolean result =  hashMapper(this.instanceData,key,value);
-           if(!result) log.error("Could not find key "+ key);
-        } catch (ParseException e) {
+            transformer = transformerFactory.newTransformer();
+        } catch (TransformerConfigurationException e) {
             e.printStackTrace();
         }
     }
 
-    public String getXML(){
-//        XStream magicApi = new XStream();
-    	XStream magicApi = new XStream(new StaxDriver()) {
-            @Override
-            protected void setupConverters() {
-            }
-        };
-        magicApi.allowTypesByWildcard(new String[] {
-            "com.your.package.**"
-        });
-    	magicApi.registerConverter(new MapEntryConverter());
-        magicApi.alias("data", Map.class);
-        return magicApi.toXML(this.instanceData).replaceAll("__", "_");
+    public void init() throws ParserConfigurationException, IOException, SAXException, TransformerException {
+        formXml = new File(formPath);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        this.instanceData = builder.parse(formXml);
+        this.instanceData.getDocumentElement().normalize();
     }
 
-    public Map<String, Object> parse(String xml) {
-    	System.out.println(xml);
-//        XStream magicApi = new XStream();
-    	XStream magicApi = new XStream(new StaxDriver()) {
-            @Override
-            protected void setupConverters() {
-            }
-        };
-        magicApi.allowTypesByWildcard(new String[] {
-            "com.your.package.**"
-        });
-        magicApi.registerConverter(new MapEntryConverter());
-        magicApi.alias("data", Map.class);
-        this.instanceData = (Map<String, Object>) magicApi.fromXML(xml);
-        return this.instanceData;
+    public String getXML() throws TransformerException {
+        DOMSource source = new DOMSource(this.instanceData);
+        transformer.transform(source, sr);
+        return writer.toString();
     }
 
+    public InputStream getInputStream() throws TransformerException {
+        DOMSource source = new DOMSource(this.instanceData);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        Result outputTarget = new StreamResult(outputStream);
+        transformer.transform(source, outputTarget);
+        return new ByteArrayInputStream(outputStream.toByteArray());
+    }
+
+    public void addTranslationLabels(ArrayList<Item> options, String key) {
+        // Get all translations by language
+        // Get the current dummy option in the page
+
+        // Step 1
+        // Iterate over translations
+        // Iterate over options
+        // For a translation in X language add the following =>
+                /*  <text id="/data/group_matched_vacancies/initial_interest/dummy15:label">
+                        <value>15 Delivery Executive at DM Labsy</value>
+                    </text>
+                 */
+        // Remove the original translations
+        NodeList translations = this.instanceData.getElementsByTagName("translation");
+        NodeList allSelectTags =  this.instanceData.getElementsByTagName("select1");
+
+        for(int i=0; i< allSelectTags.getLength(); i++){
+            if(allSelectTags.item(i).getAttributes().getNamedItem("ref").getChildNodes().item(0).toString().contains(key)){
+                Node selectElement = allSelectTags.item(i);
+                Node itemNodeClone = selectElement.getFirstChild().getNextSibling().cloneNode(true);
+                /* Set Dummy ID if empty */
+                // ref="jr:itext('/data/group_matched_vacancies/initial_interest/dummy15:label')
+                // dummyID = /data/group_matched_vacancies/initial_interest/dummy15:label
+                String dummyID = itemNodeClone.getChildNodes().item(0)
+                        .getAttributes().getNamedItem("ref")
+                        .getChildNodes().item(0).getNodeValue()
+                        .replace("jr:itext('", "")
+                        .replace("')", "");
+
+                for(int j =0; j < translations.getLength(); j++) {
+                    NodeList children = translations.item(j).getChildNodes();
+                    Node translationNode = null;
+                    boolean found = false;
+
+                    /* Loop child nodes to find dummy element for clone & removal */
+                    for(int k =0; k < children.getLength();k++) {
+                        /* Find the child with ref value from the last item */
+                        if(children.item(k).getAttributes().getNamedItem("id") != null
+                                && children.item(k).getAttributes().getNamedItem("id").getChildNodes().item(0).getNodeValue().equals(dummyID)) {
+                            /* Set language clone */
+                            translationNode = children.item(k);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if(found) {
+                        for (Item item : options) {
+                            String label = item.value + " " + item.label;
+
+                            /* Create New ID for translation choices & Ref for select choice*/
+                            // ID = /data/group_matched_vacancies/initial_interest/<item.value>:label
+                            String id = dummyID.replace(":label", "") + item.value + ":label";
+                            String newRefV = "jr:itext('" + id + "')";
+
+                            /* Get translation clone of dummy select choice and remove them from xml
+                             * Append translation clone with new id */
+                            log.info("Language: " + translations.item(j).getAttributes().getNamedItem("lang").getChildNodes().item(0).getNodeValue());
+
+                            Node clone = translationNode.cloneNode(true);
+                            clone.getFirstChild().getFirstChild().setNodeValue(label); // set value
+                            clone.getAttributes().getNamedItem("id").getChildNodes().item(0).setNodeValue(id); // set id
+                            translations.item(j).appendChild(clone);
+                        }
+//                        translations.item(j).removeChild(translationNode);
+                    }
+                }
+            }
+        }
+    }
+
+    public void addSelectOneOptions(ArrayList<Item> options, String key){
+        NodeList e =  this.instanceData.getElementsByTagName("select1");
+        boolean found = false;
+        Node selectElement = null;
+
+        ArrayList rArr = new ArrayList();
+
+        // Step 2
+        // Iterate over options
+            // Add the following as a new item
+            /*  <item>
+                    <label ref="jr:itext('/data/group_matched_vacancies/initial_interest/dummy15:label')">15 Delivery Executive at DM Labsy</label>
+                    <value>15</value>
+                </item>
+             */
+        // Remove the original item
+
+        for(int i=0; i< e.getLength(); i++){
+            if(e.item(i).getAttributes().getNamedItem("ref").getChildNodes().item(0).toString().contains(key)){
+        		found = true;
+                selectElement = e.item(i);
+
+                for (int a = 0; a < options.size(); a++){
+                    Node itemNodeClone = selectElement.getFirstChild().getNextSibling().cloneNode(true);
+                    String dummyID = itemNodeClone.getChildNodes().item(0)
+                            .getAttributes().getNamedItem("ref")
+                            .getChildNodes().item(0).getNodeValue()
+                            .replace("jr:itext('", "")
+                            .replace("')", "");
+                	Item item = options.get(a);
+                	String label = item.value + " " + item.label;
+                    // ID = /data/group_matched_vacancies/initial_interest/<item.value>:label
+                    String ref = "jr:itext('" + dummyID.replace(":label", "") + item.value + ":label')";
+
+                    if(itemNodeClone.getChildNodes().item(0).getFirstChild() == null) {
+                    	itemNodeClone.getChildNodes().item(0).appendChild(this.instanceData.createTextNode(label));
+                    } else {
+                    	itemNodeClone.getChildNodes().item(0).getFirstChild().setNodeValue(label);
+                    }
+
+                    itemNodeClone.getChildNodes().item(0)
+                            .getAttributes().getNamedItem("ref")
+                            .getChildNodes().item(0).setNodeValue(ref);
+
+                    if(itemNodeClone.getChildNodes().item(1).getFirstChild() == null) {
+                    	itemNodeClone.getChildNodes().item(1).appendChild(this.instanceData.createTextNode(item.value + " " + item.label));
+                    } else {
+                    	itemNodeClone.getChildNodes().item(1).getFirstChild().setNodeValue(item.value);
+                    }
+
+                    selectElement.appendChild(itemNodeClone);
+                }
+                
+
+                addTranslationLabels(options, key);
+                
+                // Delete the dummy one.
+                selectElement.removeChild(selectElement.getFirstChild().getNextSibling());
+                
+                break;
+            }
+        }
+    }
 }

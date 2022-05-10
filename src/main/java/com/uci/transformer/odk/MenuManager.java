@@ -1,9 +1,15 @@
 package com.uci.transformer.odk;
 
 import java.util.Arrays;
+
+import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
 import com.uci.transformer.odk.repository.QuestionRepository;
+import com.uci.transformer.odk.utilities.FormUpdation;
+import com.uci.transformer.odk.utilities.Item;
+import com.uci.utils.cache.service.RedisCacheService;
+
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
@@ -11,6 +17,7 @@ import messagerosa.core.model.ButtonChoice;
 import messagerosa.core.model.MediaCategory;
 import messagerosa.core.model.StylingTag;
 import messagerosa.core.model.XMessagePayload;
+import reactor.core.publisher.Flux;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.javarosa.core.model.*;
@@ -32,7 +39,11 @@ import org.javarosa.model.xform.XFormsModule;
 import org.javarosa.xform.parse.XFormParser;
 import org.javarosa.xform.util.XFormUtils;
 import org.javarosa.xpath.XPathTypeMismatchException;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.io.*;
 import java.nio.file.FileSystems;
@@ -73,11 +84,19 @@ public class MenuManager {
     QuestionRepository questionRepo;
     String assesGoToStartChar;
     String assesOneLevelUpChar;
+    JSONObject user;
+    JSONObject campaign;
+    boolean shouldUpdateFormXML = false;
     Integer formDepth;
     String stylingTag;
     XMessagePayload payload;
+    String flow;
+    Integer questionIndex;
+    RedisCacheService redisCacheService;
+    String userID;
+    String appID;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -85,12 +104,33 @@ public class MenuManager {
         this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
+        this.redisCacheService = redisCacheService;
+        this.userID = userID;
         this.payload = payload;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, Boolean isPrefilled, QuestionRepository questionRepo, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
+        this.xpath = xpath;
+        this.answer = answer;
+        this.instanceXML = instanceXML;
+        this.formPath = formPath;
+        this.isSpecialResponse = false;
+        this.isPrefilled = false;
+        this.formID = formID;
+        this.user = user;
+        this.redisCacheService = redisCacheService;
+        this.userID = userID;
+        this.appID = appID;
+        this.payload = payload;
+
+        setAssesmentCharacters();
+    }
+
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
+                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID,
+                       String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -99,6 +139,32 @@ public class MenuManager {
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
+        this.redisCacheService = redisCacheService;
+        this.userID = userID;
+        this.appID = appID;
+        this.payload = payload;
+        
+        setAssesmentCharacters();
+    }
+
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
+                       Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
+                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID,
+                       String appID, XMessagePayload payload) {
+        this.xpath = xpath;
+        this.answer = answer;
+        this.instanceXML = instanceXML;
+        this.formPath = formPath;
+        this.isSpecialResponse = false;
+        this.isPrefilled = isPrefilled;
+        this.formID = formID;
+        this.questionRepo = questionRepo;
+        this.user=user;
+        this.shouldUpdateFormXML = shouldUpdateFormXML;
+        this.campaign = campaign;
+        this.redisCacheService = redisCacheService;
+        this.userID = userID;
+        this.appID = appID;
         this.payload = payload;
         
         setAssesmentCharacters();
@@ -155,14 +221,47 @@ public class MenuManager {
 
     public ServiceResponse start() {
         new XFormsModule().registerModule();
+        
         FECWrapper fecWrapper = loadForm(formPath, xpath); // If instance load from instance (If form is filled load new)
         formController = fecWrapper.controller;
+        
         String currentPath = "";
         String udpatedInstanceXML = "";
         XMessagePayload nextQuestion;
-        SaveStatus saveStatus = new SaveStatus();
+        SaveStatus saveStatus = new SaveStatus();        
+        
+
+        String langCache = getFormLanguageCache();
+//    	log.info("MenuManager XPath: "+xpath);
+    	if(formController.getModel().getLanguages() != null && langCache != null && !langCache.isEmpty()) {
+        	setFormLanguage(langCache);
+        	log.info("1 Selected Lang: "+formController.getModel().getLanguage());
+    	}
+        
+        log.info("MenuManager XPath: "+xpath);
+        if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
+        	setFormLanguage(answer);
+        	log.info("2 Selected language: "+formController.getModel().getLanguage());
+        	
+//        	formController.stepToNextEvent();
+//        	try {
+//                udpatedInstanceXML = getCurrentInstance();
+//            } catch (IOException e) {
+//            	e.printStackTrace();
+//            }
+//
+//            nextQuestion = createView(formController.getModel().getEvent(), "");
+//            currentPath = getXPath(formController, formController.getModel().getFormIndex());
+        } 
         
         if (answer != null && answer.equals(assesOneLevelUpChar)) {
+        	/* for level one up character, if last message xpath contains eof, restart the bot */
+            if(xpath.contains("eof")) {
+                 xpath = null;
+                 answer = null;
+                 return start();
+            }
+        	
             this.isSpecialResponse = true;
             // Get to the note of the previous group
 
@@ -191,8 +290,10 @@ public class MenuManager {
             } else {
                 try {
                     // Skip if it is a note
-                    if (isIntro())
-                        formController.stepToPreviousEvent();
+                    if (isIntro()) {
+                    	formController.stepToPreviousEvent();
+                    }
+                        
                     formController.getModel().getQuestionPrompt();
                 } catch (Exception e) {
                     formController.stepToPreviousEvent();
@@ -202,8 +303,10 @@ public class MenuManager {
                 formController.stepToPreviousEvent();
                 try {
                     // Skip if it is a note
-                    if (isIntro())
-                        formController.stepToPreviousEvent();
+                    if (isIntro()) {
+                    	formController.stepToPreviousEvent();
+                    }
+                        
 
                     // Skip a non question TODO: Should remove all non questions. Right now doing only for one.
                     if (formController.getModel().getEvent() != FormEntryController.EVENT_GROUP) {
@@ -233,7 +336,7 @@ public class MenuManager {
         } else {
             try {
                 if (xpath != null && !xpath.equals("endOfForm")) {
-                    saveStatus = addResponseToForm(getIndexFromXPath(xpath, formController), answer);
+                    saveStatus = addResponseToForm(getIndexFromXPath(xpath, formController), answer, xpath);
                     udpatedInstanceXML = saveStatus.getInstanceXML();
                 } else {
                     FormInstance formInstance = formController.getModel().getForm().getInstance();
@@ -277,7 +380,7 @@ public class MenuManager {
                 e.printStackTrace();
             }
         }
-        
+
         // check if currentPath is persisted in the DB. If not, insert it with all the things.
         String formVersion = formController.getModel().getForm().getInstance().formVersion;
         Question question = new Question();
@@ -291,8 +394,10 @@ public class MenuManager {
                 choices.add(buttonChoice.getText());
             }
         }
-        
+
         question.setMeta(Json.of(new Meta(nextQuestion.getText(), choices).toString()));
+
+        log.info("udpatedInstanceXML: "+udpatedInstanceXML);
 
         FormIndex formIndex = formController.getModel().getFormIndex();
         ArrayList<Integer> conversationLevel = new ArrayList();
@@ -307,20 +412,89 @@ public class MenuManager {
 		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
     }
     
+    private String getFormLanguageCache() {
+    	try {
+	    	if(this.redisCacheService != null) {
+	    		String key = this.userID;
+	    		if(this.appID != null) {
+	    			key = this.appID+"-"+key;
+	    		}
+	    		String language = (String)redisCacheService.getLanguageCache(key);
+	    	  	if(language != null) {
+	    	  		return language;
+	    	  	} else {
+	    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
+	    	  	}
+	    	}
+    	} catch (Exception e) {
+    		log.info("Exception in getFormLanguageCache: "+e.getMessage());
+    	}
+    	return "English (en)";
+    }
+    
+    private void setFormLanguageCache(String language) {
+    	try {
+    		if(this.redisCacheService != null) {
+    			String key = this.userID;
+	    		if(this.appID != null) {
+	    			key = this.appID+"-"+key;
+	    		}
+        		redisCacheService.setLanguageCache(key, language);
+                log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
+        	}
+    	} catch (Exception e) {
+    		log.info("Exception in setFormLanguageCache: "+e.getMessage());
+    	}
+    	
+    }
+    
+    private String redisKeyWithPrefix(String key) {
+    	return System.getenv("ENV")+"-"+key;
+    }
+    
+    private void setFormLanguage(String lang) {
+    	String langArr[] = lang.split(" ");
+    	try {
+    		if(langArr[0] != null && !langArr[0].isEmpty()) {
+    			Integer n = Integer.parseInt(langArr[0]);
+    			langArr = Arrays.copyOfRange(langArr, 1, langArr.length);
+    		}
+    	} catch (NumberFormatException ex) {
+    		log.info("Language text does not contain a number");
+    	}
+    	
+    	if(langArr.length > 0) {	
+    		lang = String.join(" ", langArr);
+        }
+    	
+    	final String[] languages = formController.getModel().getLanguages();
+        if (languages != null) {
+            for (int i = 0; i < languages.length; i++) {
+            	log.info("A lang "+i+": "+languages[i]);
+                if (lang.equals(languages[i])) {
+                    formController.setLanguage(lang);
+                    setFormLanguageCache(lang);
+                    break;
+                }
+            }
+        }
+    }
+    
     /**
      * Get Question XMessage Payload with text & button choices from question xPath
      * 
      * @return XMessagePayload
      */
     public XMessagePayload getQuestionPayloadFromXPath(String xpathStr) {
+    	log.info("getQuestionPayloadFromXPath called");
     	new XFormsModule().registerModule();
-        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
-        formController = fecWrapper.controller;
+        FECWrapper fecWrapper2 = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        FormEntryController formController2 = fecWrapper2.controller;
         
         /* Previous Question */
         ArrayList<ButtonChoice> choices = new ArrayList();
         choices = getChoices(choices);
-        String questionText = renderQuestion(formController);
+        String questionText = renderQuestion(formController2);
         
         XMessagePayload payload = XMessagePayload.builder()
         								.text(questionText)
@@ -328,8 +502,8 @@ public class MenuManager {
         								.build();
         
         try {
-        	if(formController.getModel().getQuestionPrompt().getBindAttributes() != null) {
-        		payload = getPayloadWithBindTags(payload, formController.getModel().getQuestionPrompt().getBindAttributes());
+        	if(formController2.getModel().getQuestionPrompt().getBindAttributes() != null) {
+        		payload = getPayloadWithBindTags(payload, formController2.getModel().getQuestionPrompt().getBindAttributes());
             }
         } catch (Exception e) {
         	log.info("Exception in getQuestionPayloadFromXPath for bind attributes: "+e.getMessage());
@@ -344,11 +518,12 @@ public class MenuManager {
      * @return Question
      */
     public Question getQuestionFromXPath(String xpathStr) {
+    	log.info("getQuestionPayloadFromXPath called");
     	new XFormsModule().registerModule();
-        FECWrapper fecWrapper = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
-        formController = fecWrapper.controller;
+        FECWrapper fecWrapper2 = loadForm(formPath, xpathStr); // If instance load from instance (If form is filled load new)
+        FormEntryController formController2 = fecWrapper2.controller;
         
-    	String formVersion = formController.getModel().getForm().getInstance().formVersion;
+    	String formVersion = formController2.getModel().getForm().getInstance().formVersion;
         Question question = new Question();
         question.setQuestionType(Question.QuestionType.STRING);
         question.setFormID(formID);
@@ -389,20 +564,19 @@ public class MenuManager {
         return payload.toString();
     }
 
-    public SaveStatus addResponseToForm(FormIndex formIndex, String value) throws IOException {
+    public SaveStatus addResponseToForm(FormIndex formIndex, String value, String xpath) throws IOException {
         int saveStatus = -1;
         if (value != null) {
             // Works with name but you get Label
             try {
-            	log.info("Question control type: "+formController.getModel().getQuestionPrompt().getControlType()
-            			+", control datatype: "+formController.getModel().getQuestionPrompt().getDataType()
-            			+", for xpath: "+this.xpath);
-            	if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
+//            	log.info("3 Selected Lang: "+formController.getModel().getLanguage());
+            	
+                if (formController.getModel().getQuestionPrompt().getControlType() == Constants.CONTROL_SELECT_ONE) {
                     List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     boolean found = false;
                     if (items != null) {
                         for (int i = 0; i < items.size(); i++) {
-                            if (value.equals(items.get(i).getLabelInnerText()) ||
+                            if (value.equals(getLocaleChoiceText(items.get(i))) ||
                                     checkForSpaceInOptions(value, items, i) ||
                                     checkForDotInOptions(value, items, i) ||
                                     this.isSpecialResponse
@@ -411,19 +585,22 @@ public class MenuManager {
                                 IAnswerData answerData;
                                 if (!this.isSpecialResponse) answerData = new StringData(items.get(i).getValue());
                                 else answerData = new StringData(value);
+                                log.info("answerData 1: "+answerData);
                                 saveStatus = formController.answerQuestion(formIndex, answerData, true);
                                 break;
                             }
                         }
                         if (!found) { //Checking for labels with indexes as part of the text only
                             for (int i = 0; i < items.size(); i++) {
-                                if (value.equals(items.get(i).getLabelInnerText().split(" ")[0]) ||
-                                        value.equals(items.get(i).getLabelInnerText().split(". ")[0])
+                            	String label = getLocaleChoiceText(items.get(i));
+                            	if (value.equals(label.split(" ")[0]) ||
+                                        value.equals(label.split(". ")[0])
                                 ) {
                                     found = true;
                                     IAnswerData answerData;
                                     if (!this.isSpecialResponse) answerData = new StringData(items.get(i).getValue());
                                     else answerData = new StringData(value);
+                                    log.info("answerData 1: "+answerData);
                                     saveStatus = formController.answerQuestion(formIndex, answerData, true);
                                     break;
                                 }
@@ -510,12 +687,12 @@ public class MenuManager {
                             saveStatus = formController.answerQuestion(formIndex, answerData, true);
                         }
                     } catch (Exception e) {
-                        log.severe("Error in filling form response");
+                        log.severe("Error in filling form response: "+e.getMessage());
                         saveStatus = ANSWER_OK;
                     }
                 }
             } catch (Exception e) {
-                log.severe("Error in filling form response");
+                log.severe("Error in filling form response: "+e.getMessage());
                 IAnswerData answerData = new IntegerData(Integer.parseInt(value));
                 saveStatus = formController.answerQuestion(formIndex, answerData, true);
             }
@@ -534,7 +711,7 @@ public class MenuManager {
     private boolean checkForSpaceInOptions(String value, List<SelectChoice> items, int i) {
         // Example 1 Option1
         try {
-            return value.equals(items.get(i).getLabelInnerText().split(" ")[0]);
+            return value.equals(getLocaleChoiceText(items.get(i)).split(" ")[0]);
         } catch (Exception e) {
             return false;
         }
@@ -543,7 +720,7 @@ public class MenuManager {
     private boolean checkForDotInOptions(String value, List<SelectChoice> items, int i) {
         // Example 1.
         try {
-            return value.equals(items.get(i).getLabelInnerText().split(" ")[0].split(".")[0]);
+            return value.equals(getLocaleChoiceText(items.get(i)).split(" ")[0].split(".")[0]);
         } catch (Exception e) {
             return false;
         }
@@ -750,6 +927,7 @@ public class MenuManager {
      * @return newly created View
      */
     private XMessagePayload createView(int event, String previousPrompt) {
+    	log.info("previousPrompt: "+previousPrompt);
         log.info("xPath: " + getXPath(formController, formController.getModel().getFormIndex()));
         log.info("Event: " + getEvent(formController));
 
@@ -764,21 +942,22 @@ public class MenuManager {
                 // Check for rendered Types
                 ArrayList<ButtonChoice> choices = new ArrayList<>();
                 try {
-                    if (formController.getModel().getEvent() == FormEntryController.EVENT_REPEAT) {
-//                        formController.stepToNextEvent();
-                        return createView(formController.stepToNextEvent(), previousPrompt);
+                	if (formController.getModel().getEvent() == FormEntryController.EVENT_REPEAT) {
+                    	// formController.stepToNextEvent();
+                    	return createView(formController.stepToNextEvent(), previousPrompt);
                     }
                     if (formController.getModel().getEvent() == FormEntryController.EVENT_GROUP) {
-                        formController.stepToNextEvent();
+                    	formController.stepToNextEvent();
                     }
                     // Check for note and add
                     if (isIntro() && !isQuestionChoiceType(formController)) {
-                        previousPrompt = renderQuestion(formController);
+                    	previousPrompt = renderQuestion(formController);
+                        log.info("found previousPrompt: "+previousPrompt);
                         return createView(formController.stepToNextEvent(), previousPrompt);
                     }
                     
                 	choices = getChoices(choices);
-                    
+
                     //Check this
                     return getPayloadWithBindTags(
                     		XMessagePayload.builder().text(previousPrompt + renderQuestion(formController)).buttonChoices(choices).build(), 
@@ -812,19 +991,20 @@ public class MenuManager {
     }
 
     private ArrayList<ButtonChoice> getChoices(ArrayList<ButtonChoice> choices) {
-        ArrayList<ButtonChoice> buttonChoices = new ArrayList<>();
+    	ArrayList<ButtonChoice> buttonChoices = new ArrayList<>();
         try {
-            switch (formController.getModel().getQuestionPrompt().getControlType()) {
+        	switch (formController.getModel().getQuestionPrompt().getControlType()) {
                 case Constants.CONTROL_SELECT_ONE:
-                    List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
+                	List<SelectChoice> items = formController.getModel().getQuestionPrompt().getSelectChoices();
                     if (items != null) {
-                        for (int i = 0; i < items.size(); i++) {
+                    	for (int i = 0; i < items.size(); i++) {
                             //Check
-                            buttonChoices.add(ButtonChoice.builder().key(items.get(i).getValue()).text(items.get(i).getLabelInnerText()).build());
+                            buttonChoices.add(ButtonChoice.builder().key(items.get(i).getValue()).text(getLocaleChoiceText(items.get(i))).build());
                         }
                     }
             }
         } catch (Exception e) {
+        	log.info("Exception in get choices: "+e.getMessage());
         }
         return getQuestionsChoiceWithKey(buttonChoices);
     }
@@ -905,14 +1085,47 @@ public class MenuManager {
 
     private FormDef createFormDefFromCacheOrXml(String formPath, File formXml) {
 
-        FileInputStream fis = null;
+        InputStream fis = null;
         // no binary, read from xml
         try {
             // log.info(String.format("Attempting to load from: %s", formXml.getAbsolutePath()));
-            Path path = FileSystems.getDefault().getPath("CensusBot.xml");
-            fis = new FileInputStream(formXml);
-            FormDef fd = XFormUtils.getFormFromInputStream(fis);
-            return fd;
+            if(this.shouldUpdateFormXML) {
+                FormUpdation ss = FormUpdation.builder().formPath(formPath).build();
+                ss.init();
+
+                // Populate items - TODO fix this hardcoding with actual schema
+                try{
+                    ArrayList<Item> options = new ArrayList<>();
+                    JSONArray matchedVacancies = this.user.getJSONArray("matched");
+                    log.info("matchedVacancies count: "+matchedVacancies.length());
+                    if(matchedVacancies.length() > 0){
+                        for(int i=0; i<matchedVacancies.length(); i++){
+                            try {
+                            	String label = matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getString("job_role") +
+                                        " at " + matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getJSONObject("employer_detail").getString("company_name");
+                                String value = String.valueOf(matchedVacancies.getJSONObject(i).getJSONObject("vacancy_detail").getInt("id"));
+                                log.info("vacancy label: "+label+", value: "+value);
+                                options.add(Item.builder().label(label).value(value).build());
+                            } catch (Exception ex) {
+                            	log.info("Exception in createFormDefFromCacheOrXml forloop: "+ex.getMessage());
+                            	ex.printStackTrace();
+                            }
+                        	
+                        }
+//                        if(options.size() > 0) {
+                        	ss.addSelectOneOptions(options, "vacancies");
+//                        }
+                    }
+//                    log.info("Form XML :" +ss.getXML());
+                } catch(Exception e) {
+                	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
+                	e.printStackTrace();
+                }
+                fis = ss.getInputStream();
+            }else{
+                fis = new FileInputStream(formXml);
+            }
+            return XFormUtils.getFormFromInputStream(fis);
         } catch (Exception e) {
             log.severe("CP-2" + e.getMessage());
         } finally {
@@ -1033,5 +1246,28 @@ public class MenuManager {
     	}
     	
     	return payload;
+    }
+    
+    /**
+     * Get Choice Label text as per current locale
+     * @param item
+     * @return
+     */
+    private String getLocaleChoiceText(SelectChoice item) {
+    	String locale = "";
+    	if(formController.getModel().getLanguages() != null 
+    			&& formController.getModel().getLanguage() != null 
+				&& !formController.getModel().getLanguage().isEmpty()) {
+    		locale = formController.getModel().getForm().getLocalizer().getLocale();
+    			
+    	}
+    	String label = item.getLabelInnerText();
+    	log.info("Label first: "+label+", locale: "+locale);
+		if(!locale.isEmpty() && item.getTextID() != null && !item.getTextID().isEmpty()) {
+			label = formController.getModel().getForm().getLocalizer().getLocaleData(locale).get(item.getTextID());
+			log.info("Label: "+label+", textid: "+item.getTextID()+", value: "+item.getValue());
+		}
+		log.info("Label final: "+label);
+		return label;
     }
 }
