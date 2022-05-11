@@ -19,7 +19,7 @@ public abstract class TransformerProvider {
 
     public abstract Mono<XMessage> transform(XMessage xMessage) throws Exception;
 
-    public abstract Mono<List<XMessage>> transformToMany(XMessage xMessage);
+//    public abstract Mono<List<XMessage>> transformToMany(XMessage xMessage);
 
 }
 

@@ -95,6 +95,9 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${outbound}")
     public String outboundTopic;
 
+    @Value("${processOutbound}")
+    private String processOutboundTopic;
+
     @Value("${telemetry}")
     public String telemetryTopic;
 
@@ -156,39 +159,23 @@ public class ODKConsumerReactive extends TransformerProvider {
                         try {
                             XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.value().getBytes()));
                             logTimeTaken(startTime, 1);
-                            if (msg.getMessageType() == XMessage.MessageType.BROADCAST_TEXT) {
-                                transformToMany(msg).subscribe(new Consumer<List<XMessage>>() {
-                                    @Override
-                                    public void accept(List<XMessage> messages) {
-                                        messages = (ArrayList<XMessage>) messages;
-                                        for (XMessage msg : messages) {
-                                            try {
-                                                kafkaProducer.send(outboundTopic, msg.toXML());
-                                            } catch (JAXBException e) {
-                                                e.printStackTrace();
-                                            }
-                                        }
-                                    }
-                                });
-                            } else {
-                                transform(msg)
-                                        .subscribe(new Consumer<XMessage>() {
-                                            @Override
-                                            public void accept(XMessage transformedMessage) {
-                                                logTimeTaken(startTime, 2);
-                                                if (transformedMessage != null) {
-                                                    try {
-                                                        kafkaProducer.send(outboundTopic, transformedMessage.toXML());
-                                                        long endTime = System.nanoTime();
-                                                        long duration = (endTime - startTime);
-                                                        log.error("Total time spent in processing form: " + duration / 1000000);
-                                                    } catch (JAXBException e) {
-                                                        e.printStackTrace();
-                                                    }
+                            transform(msg)
+                                    .subscribe(new Consumer<XMessage>() {
+                                        @Override
+                                        public void accept(XMessage transformedMessage) {
+                                            logTimeTaken(startTime, 2);
+                                            if (transformedMessage != null) {
+                                                try {
+                                                    kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
+                                                    long endTime = System.nanoTime();
+                                                    long duration = (endTime - startTime);
+                                                    log.error("Total time spent in processing form: " + duration / 1000000);
+                                                } catch (JAXBException e) {
+                                                    e.printStackTrace();
                                                 }
                                             }
-                                        });
-                            }
+                                        }
+                                    });
                         } catch (JAXBException e) {
                             e.printStackTrace();
                         } catch (Exception e) {
@@ -204,74 +191,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                     }
                 }).subscribe();
 
-    }
-
-    @Override
-    public Mono<List<XMessage>> transformToMany(XMessage xMessage) {
-
-        ArrayList<XMessage> messages = new ArrayList<>();
-
-        // Get All Users with Data.
-        return campaignService.getCampaignFromNameTransformer(xMessage.getCampaign()).map(new Function<JsonNode, List<XMessage>>() {
-            @Override
-            public List<XMessage> apply(JsonNode campaign) {
-                String campaignID = campaign.get("id").asText();
-                JSONArray users = userService.getUsersFromFederatedServers(campaignID);
-                String formID = getFormID(campaign);
-                String formPath = getFormPath(formID);
-                JsonNode firstTransformer = campaign.findValues("transformers").get(0).get(0);
-                ArrayNode hiddenFields = (ArrayNode) firstTransformer.findValue("hiddenFields");
-
-                for (int i = 34; i < users.length(); i++) {
-                    String userPhone = ((JSONObject) users.get(i)).getString("whatsapp_mobile_number");
-                    ServiceResponse response = new MenuManager(null, null, null, formPath, formID, false, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null).start();
-                    FormInstanceUpdation ss = FormInstanceUpdation.builder().applicationID(campaignID).phone(userPhone).build();
-                    ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-                    ss.parse(response.currentResponseState);
-                    String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + ss.updateHiddenFields(hiddenFields, (JSONObject) users.get(i)).getXML();
-                    MenuManager mm = new MenuManager(null, null, instanceXMlPrevious, formPath, formID, true, questionRepo, redisCacheService, userPhone, xMessage.getApp(), null);
-                    response = mm.start();
-
-                    // Create new xMessage from response
-                    XMessage x = getMessageFromResponse(xMessage, response);
-                    XMessage nextMessage = getClone(x);
-
-                    // Update user info
-                    SenderReceiverInfo to = nextMessage.getTo();
-                    to.setUserID(userPhone);
-                    nextMessage.setTo(to);
-
-                    nextMessage.setMessageState(NOT_SENT);
-                    nextMessage.setMessageType(HSM);
-
-                    // Update database with new fields.
-                    appendNewResponse(formID, nextMessage, response);
-                    replaceUserState(formID, nextMessage, response);
-                    messages.add(nextMessage);
-                }
-                return messages;
-            }
-        });
-
-    }
-    
-    private Map<String, String> getCampaignAndFormIdFromXMessage(XMessage xMessage) {
-    	Map<String, String> result = new HashMap<String, String>();
-    	String campaignID = "";
-    	String formID = "";
-    	if(xMessage.getTransformers() != null && xMessage.getTransformers().size() > 0) {
-    		Transformer t = xMessage.getTransformers().get(0);
-    		if(!t.getMetaData().isEmpty()) {
-    			Map<String, String> metaData = (Map<String, String>) t.getMetaData();
-        		formID = (String) metaData.get("currentFormID");
-        		campaignID = (String) metaData.get("campaignID");
-    		}
-    	}
-    	
-    	result.put("formID", formID);
-    	result.put("campaignID", campaignID);
-    	
-    	return result;
     }
     
     @Override
@@ -498,100 +417,6 @@ public class ODKConsumerReactive extends TransformerProvider {
     	log.info("xPath for isEndOfForm check: "+xPath);
     	return xPath.contains("endOfForm") || xPath.contains("eof");
     }
-    
-    /**
-     * Get current form id set in file for user & campaign 
-     * 
-     * @param userID
-     * @param campaignID
-     * @return
-     */
-    private String getCurrentFormIDFromFile(String userID, String campaignID) {
-    	String currentFormID = "";
-    	try {
-    		File file = getCurrentUserJsonFile();
-        	InputStream inputStream = new FileInputStream(file);
-        	byte[] bdata = FileCopyUtils.copyToByteArray(inputStream);
-            
-        	ObjectMapper mapper = new ObjectMapper();
-        	JsonNode rootNode = mapper.readTree(bdata);
-            log.info("UserCurrentForm file data node:"+rootNode);
-            
-            if(!rootNode.isEmpty() && rootNode.get(userID) != null 
-            		&& rootNode.path(userID).get(campaignID) != null) {
-            	currentFormID = rootNode.path(userID).get(campaignID).asText();
-            }
-        } catch (IOException e) {
-        	log.error("Error in getCurrentFormIDFromFile:"+e.getMessage());
-        }
-        return currentFormID;
-    }
-    
-    /**
-     * Save current form id in file for user & campaign
-     * 
-     * @param userID
-     * @param campaignID
-     * @param currentFormID
-     */
-    private void saveCurrentFormIDInFile(String userID, String campaignID, String currentFormID) {
-    	try {
-    		File file = getCurrentUserJsonFile();
-        	InputStream inputStream = new FileInputStream(file);
-        	byte[] bdata = FileCopyUtils.copyToByteArray(inputStream);
-            
-        	ObjectMapper mapper = new ObjectMapper();
-            JsonNode rootNode = mapper.readTree(bdata);
-        	
-            if(rootNode.isEmpty()) {
-            	rootNode = mapper.createObjectNode();
-            }
-            
-            if(rootNode != null && !rootNode.isEmpty() && rootNode.get(userID) != null) {
-            	((ObjectNode) rootNode.path(userID)).put(campaignID, currentFormID);
-        	} else {
-            	JsonNode campaignNode = mapper.createObjectNode();
-            	((ObjectNode) campaignNode).put(campaignID, currentFormID);
-            	
-            	((ObjectNode) rootNode).put(userID, campaignNode);
-            }
-              
-            log.info("Data saved in userCurrentForm file:"+rootNode.toString());
-            
-            FileWriter fileWriter = new FileWriter(file);
-            fileWriter.write(rootNode.toString());
-            fileWriter.close();
-        } catch (IOException e) {
-        	log.error("Error in saveCurrentFormIDInFile:"+e.getMessage());
-        }
-    }
-	
-    /**
-	 * Get Current User Json File to get, if not exists create one
-	 * 
-	 * @return File
-	 */
-	private File getCurrentUserJsonFile() {
-		try {
-			File file = new File(getCurrentUserJsonFilePath());
-	    	if(!file.exists()) {
-	    		file.createNewFile();
-	    	}
-	    	return file;
-		} catch (IOException e) {
-			log.error("Error in getCurrentUserJsonFile:"+e.getMessage());
-		}
-		return null;
-	}
-    
-	/**
-	 * Get Path to userCurrentForm file 
-	 * 
-	 * @return String
-	 */
-    private String getCurrentUserJsonFilePath() {
-    	return "src/main/resources/userCurrentForm.json";
-    }
 
     private Mono<FormManagerParams> getPreviousMetadata(XMessage message, String formID) {
         String prevPath = null;
@@ -659,7 +484,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
-                                                                            JsonNode campaign, XMessage xMessage, Question question, Question prevQuestion,
+                                                                            Transformer transformer, XMessage xMessage, Question question, Question prevQuestion,
                                                                             String currentXPath) {
         return previousQuestions
                 .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
@@ -668,7 +493,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                         if (existingQuestionStatus.getLeft()) {
                         	log.info("Found Question id: "+existingQuestionStatus.getRight().get(0).getId()+", xPath: "+existingQuestionStatus.getRight().get(0).getXPath());
                         	saveAssessmentData(
-                                    existingQuestionStatus, formID, previousMeta, campaign, xMessage, null, currentXPath).subscribe(new Consumer<Assessment>() {
+                                    existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath).subscribe(new Consumer<Assessment>() {
                                 @Override
                                 public void accept(Assessment assessment) {
                                     log.info("Assessment Saved Successfully {}", assessment.getId());
@@ -686,7 +511,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 public void accept(Question question) {
                                 	log.info("Question Saved Successfully, id: "+question.getId()+", xPath: "+question.getXPath());
                                 	saveAssessmentData(
-                                            existingQuestionStatus, formID, previousMeta, campaign, xMessage, question, currentXPath).subscribe(new Consumer<Assessment>() {
+                                            existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath).subscribe(new Consumer<Assessment>() {
                                         @Override
                                         public void accept(Assessment assessment) {
                                             log.info("Assessment Saved Successfully {}", assessment.getId());
@@ -721,7 +546,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     private Mono<Assessment> saveAssessmentData(Pair<Boolean, List<Question>> existingQuestionStatus,
                                                 String formID, FormManagerParams previousMeta,
-                                                JsonNode campaign, XMessage xMessage, Question question,
+                                                Transformer transformer, XMessage xMessage, Question question,
                                                 String currentXPath) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
         
@@ -732,7 +557,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .question(question)
                 .deviceID(userID)
                 .answer(previousMeta.currentAnswer)
-                .botID(UUID.fromString(campaign.findValue("id").asText()))
+                .botID(UUID.fromString(getTransformerMetaDataValue(transformer, "botId")))
                 .userID(userID)
                 .build();
         try {
@@ -743,6 +568,7 @@ public class ODKConsumerReactive extends TransformerProvider {
             }
         	
         	if(question != null && !isStartingMessage) {
+        		
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
         		
                 log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
@@ -789,11 +615,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                     });
                 
         		String telemetryEvent = new AssessmentTelemetryBuilder()
-                        .build(campaign.findValue("ownerOrgID").asText(),
+                        .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
                                 xMessage.getChannel(),
                                 xMessage.getProvider(),
                                 producerID,
-                                campaign.findValue("ownerOrgID").asText(),
+                                getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
                                 assessment.getQuestion(),
                                 assessment,
                                 questionPayload,
@@ -868,12 +694,18 @@ public class ODKConsumerReactive extends TransformerProvider {
         return response.getCurrentIndex().equals("endOfForm") || response.currentIndex.contains("eof");
     }
 
-    private String getFormID(JsonNode campaign) {
-        try {
-        	return campaign.findValue("formID").asText();
-        } catch (Exception e) {
-            return "";
+    /**
+     * Get Meta data value by key in a transformer
+     * @param transformer
+     * @param key
+     * @return meta data value
+     */
+    private String getTransformerMetaDataValue(Transformer transformer, String key) {
+        Map<String, String> metaData = transformer.getMetaData();
+        if(metaData.get(key) != null && !metaData.get(key).toString().isEmpty()) {
+            return metaData.get(key).toString();
         }
+        return "";
     }
 
     @Nullable
