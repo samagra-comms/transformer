@@ -35,6 +35,11 @@
 			<name>GitHub Packages</name>
 			<url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
 		</repository>
+		<repository>
+			<id>github-dao</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/samagra-comms/dao</url>
+		</repository>
 	</repositories>
 
 	<dependencies>
@@ -145,17 +150,17 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>message-rosa</artifactId>
-			<version>0.0.1</version>
+			<version>0.0.4</version>
 		</dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>utils</artifactId>
-			<version>0.0.3</version>
+			<version>0.0.4</version>
 		</dependency>
 		<dependency>
             <groupId>com.uci</groupId>
             <artifactId>dao</artifactId>
-            <version>1.0</version>
+            <version>0.0.4</version>
         </dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->
