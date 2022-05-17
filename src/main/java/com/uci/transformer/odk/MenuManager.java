@@ -13,10 +13,7 @@ import com.uci.utils.cache.service.RedisCacheService;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
-import messagerosa.core.model.ButtonChoice;
-import messagerosa.core.model.MediaCategory;
-import messagerosa.core.model.StylingTag;
-import messagerosa.core.model.XMessagePayload;
+import messagerosa.core.model.*;
 import reactor.core.publisher.Flux;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
@@ -106,6 +103,7 @@ public class MenuManager {
         this.formID = formID;
         this.redisCacheService = redisCacheService;
         this.userID = userID;
+        this.appID = appID;
         this.payload = payload;
         
         setAssesmentCharacters();
@@ -149,8 +147,7 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, JSONObject campaign, RedisCacheService redisCacheService, String userID,
-                       String appID, XMessagePayload payload) {
+                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -161,11 +158,10 @@ public class MenuManager {
         this.questionRepo = questionRepo;
         this.user=user;
         this.shouldUpdateFormXML = shouldUpdateFormXML;
-        this.campaign = campaign;
         this.redisCacheService = redisCacheService;
-        this.userID = userID;
-        this.appID = appID;
-        this.payload = payload;
+        this.userID = xMsg.getTo().getUserID();
+        this.appID = xMsg.getApp();
+        this.payload = xMsg.getPayload();
         
         setAssesmentCharacters();
     }

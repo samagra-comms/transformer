@@ -297,7 +297,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
-                                        prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
+                                        prefilled, questionRepo, user, true, redisCacheService, xMessage);
                             }else{
                                 prefilled = false;
                                 answer = previousMeta.currentAnswer;
@@ -307,7 +307,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
-                                        prefilled, questionRepo, user, true, camp, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
+                                        prefilled, questionRepo, user, true, redisCacheService, xMessage);
                             }
                             response[0] = mm.start();
                         }
