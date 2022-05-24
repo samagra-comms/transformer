@@ -178,6 +178,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                     });
                         } catch (JAXBException e) {
                             e.printStackTrace();
+                        } catch (NullPointerException e) {
+                            log.error("An error occured : "+e.getMessage() + " at line no : "+ e.getStackTrace()[0].getLineNumber()
+                                    +" in class : "+e.getStackTrace()[0].getClassName());
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -210,7 +213,9 @@ public class ODKConsumerReactive extends TransformerProvider {
         log.info("current form ID:"+formID);
         String formPath = getFormPath(formID);
         log.info("current form path:"+formPath);
-
+        if(formPath == null ){
+            return null;
+        }
         isStartingMessage = xMessage.getPayload().getText().equals(getTransformerMetaDataValue(transformer, "startingMessage"));
         Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
 
@@ -713,7 +718,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     public static String getFormPath(String formID) {
     	FormsDao dao = new FormsDao(JsonDB.getInstance().getDB());
-        return dao.getFormsCursorForFormId(formID).getFormFilePath();
+        try{
+            return dao.getFormsCursorForFormId(formID).getFormFilePath();
+        } catch (NullPointerException ex){
+            log.info("ODK form not found '"+formID+"'");
+            return null;
+        }
     }
 
     private Mono<GupshupMessageEntity> appendNewResponse(String formID, XMessage xMessage, ServiceResponse response) {
