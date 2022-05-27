@@ -216,7 +216,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         if(formPath == null ){
             return null;
         }
-        isStartingMessage = xMessage.getPayload().getText().equals(getTransformerMetaDataValue(transformer, "startingMessage"));
+        isStartingMessage = xMessage.getPayload().getText() == null ? false : xMessage.getPayload().getText().equals(getTransformerMetaDataValue(transformer, "startingMessage"));
         Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
 
         // Get details of user from database
