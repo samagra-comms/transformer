@@ -1115,7 +1115,7 @@ public class MenuManager {
 //                    log.info("Form XML :" +ss.getXML());
                 } catch(Exception e) {
                 	log.info("Exception in createFormDefFromCacheOrXml: "+e.getMessage());
-                	e.printStackTrace();
+//                	e.printStackTrace();
                 }
                 fis = ss.getInputStream();
             }else{
@@ -1150,6 +1150,7 @@ public class MenuManager {
             log.info(filePathLast);
             String mediaFilePath = "/tmp/forms2/" + filePathLast.split(".xml")[0] + MEDIA_SUFFIX + "/" + filePathLast;
             log.info("Media Path ::" + mediaFilePath);
+            formPath = mediaFilePath; // Change formPath to media one, so it loads the same file
             formXml = new File(mediaFilePath);
         }
 

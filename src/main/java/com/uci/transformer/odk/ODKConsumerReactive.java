@@ -247,7 +247,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             log.info("hiddenFields: "+hiddenFields);
                         } catch (Exception ex) {
                             log.error("Exception in hidden fields read: "+ex.getMessage());
-                            ex.printStackTrace();
+//                            ex.printStackTrace();
                         }
 
                         String instanceXMlPrevious = "";
