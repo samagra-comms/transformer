@@ -604,21 +604,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                         }
                     });
                 
-        		String telemetryEvent = new AssessmentTelemetryBuilder()
-                        .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                                xMessage.getChannel(),
-                                xMessage.getProvider(),
-                                producerID,
-                                getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                                assessment.getQuestion(),
-                                assessment,
-                                questionPayload,
-                                0,
-                                xMessage.getTo().getEncryptedDeviceID(),
-                                xMessage.getMessageId().getChannelMessageId(),
-                                isEndOfForm(currentXPath));
-                System.out.println(telemetryEvent);
-                kafkaProducer.send(telemetryTopic, telemetryEvent);
+        		saveTelemetryEvent(transformer, xMessage, assessment, questionPayload, currentXPath);
+
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -638,6 +625,31 @@ public class ODKConsumerReactive extends TransformerProvider {
                         log.info("Assessment Saved by id: "+assessment.getId());
                     }
                 });
+    }
+
+    private void saveTelemetryEvent(Transformer transformer, XMessage xMessage, Assessment assessment, XMessagePayload questionPayload, String currentXPath) throws Exception {
+        String telemetryEvent = new AssessmentTelemetryBuilder()
+                .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                        xMessage.getChannel(),
+                        xMessage.getProvider(),
+                        producerID,
+                        getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                        assessment.getQuestion(),
+                        assessment,
+                        questionPayload,
+                        0,
+                        xMessage.getTo().getEncryptedDeviceID(),
+                        xMessage.getMessageId().getChannelMessageId(),
+                        isEndOfForm(currentXPath));
+        System.out.println(telemetryEvent);
+        kafkaProducer.send(telemetryTopic, telemetryEvent);
+        posthogService.sendTelemetryEvent(xMessage.getTo().getUserID(), telemetryEvent).subscribe(new Consumer<String>() {
+            @Override
+            public void accept(String t) {
+                // TODO Auto-generated method stub
+                log.info("telemetry response: " + t);
+            }
+        });
     }
     
     private Flux<XMessageDAO> getLatestXMessage(String appName, String userID) {
