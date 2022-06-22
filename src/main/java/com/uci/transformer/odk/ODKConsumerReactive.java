@@ -101,6 +101,12 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${telemetry}")
     public String telemetryTopic;
 
+    @Value("${exhaust.telemetry}")
+    public String exhaustTelemetry;
+
+    @Value("${posthog.event}")
+    public String posthogEvent;
+
     @Autowired
     public SimpleProducer kafkaProducer;
 
@@ -562,50 +568,29 @@ public class ODKConsumerReactive extends TransformerProvider {
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
         		
                 log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
-                
-                /* Get Previous question XMessage */
-                getLatestXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
-                    .subscribe(new Consumer<XMessageDAO>() {
-                        @Override
-                        public void accept(XMessageDAO xMsgDao) {
-                        	log.info("found xMsgDao");
-                        	
-                            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                            
-                            /* local date time */
-                            LocalDateTime localNow = LocalDateTime.now();
-                            String current = fmt.format(localNow).toString();
-                            LocalDateTime currentDateTime = LocalDateTime.parse(current, fmt); 
-                            LocalDateTime timestamp = xMsgDao.getTimestamp();
-                            long diff_milis = ChronoUnit.MILLIS.between(timestamp, currentDateTime);
-                            long diff_secs = ChronoUnit.SECONDS.between(timestamp, currentDateTime);
-                            
-                            log.info(
-                            		"xMsgDao Id: "+xMsgDao.getId()+", userId: "+xMsgDao.getUserId()+", Timestamp: "+xMsgDao.getTimestamp()
-                            		+", XMessage stylingTag: "+questionPayload.getStylingTag()+", flow: "+questionPayload.getFlow()+", index: "+questionPayload.getQuestionIndex()
-                            		+", currentDateTime: "+currentDateTime+", timestamp: "+timestamp+", diff seconds: "+diff_secs+", diff millis: "+diff_milis);
-                            
-                            if(questionPayload.getFlow() != null 
-                            	&& !questionPayload.getFlow().isEmpty()
-                        		&& questionPayload.getQuestionIndex() != null) {
-                            	posthogService.sendDropOffEvent(
-                            			xMsgDao.getUserId(), questionPayload.getFlow().toString(), 
-                            			questionPayload.getQuestionIndex(), diff_milis)
-                            	.subscribe(new Consumer<String>() {
-									@Override
-									public void accept(String t) {
-										// TODO Auto-generated method stub
-										log.info("telemetry response: "+t);
-									}
-                            	});
-                            } else {
-                            	log.info("Posthog telemetry event not being sent for flow: "+questionPayload.getFlow()+", index: "+questionPayload.getQuestionIndex());
-                            }
-                        }
-                    });
-                
-        		sendTelemetryEvent(transformer, xMessage, assessment, questionPayload, currentXPath);
 
+
+
+
+                String telemetryEvent = new AssessmentTelemetryBuilder()
+                        .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                xMessage.getChannel(),
+                                xMessage.getProvider(),
+                                producerID,
+                                getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                assessment.getQuestion(),
+                                assessment,
+                                questionPayload,
+                                0,
+                                xMessage.getTo().getEncryptedDeviceID(),
+                                xMessage.getMessageId().getChannelMessageId(),
+                                isEndOfForm(currentXPath));
+                if (telemetryEvent.equalsIgnoreCase("true")) {
+                    sendTelemetryEvent(telemetryEvent);
+                }
+                if (posthogEvent.equalsIgnoreCase("true")) {
+                    sendPosthogEvent(xMessage, telemetryEvent, questionPayload);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -627,26 +612,52 @@ public class ODKConsumerReactive extends TransformerProvider {
                 });
     }
 
-    private void sendTelemetryEvent(Transformer transformer, XMessage xMessage, Assessment assessment, XMessagePayload questionPayload, String currentXPath) throws Exception {
-        String telemetryEvent = new AssessmentTelemetryBuilder()
-                .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                        xMessage.getChannel(),
-                        xMessage.getProvider(),
-                        producerID,
-                        getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                        assessment.getQuestion(),
-                        assessment,
-                        questionPayload,
-                        0,
-                        xMessage.getTo().getEncryptedDeviceID(),
-                        xMessage.getMessageId().getChannelMessageId(),
-                        isEndOfForm(currentXPath));
+    private void sendTelemetryEvent(String telemetryEvent) throws Exception {
         System.out.println(telemetryEvent);
         kafkaProducer.send(telemetryTopic, telemetryEvent);
-        sendPosthogEvent(xMessage, telemetryEvent);
     }
 
-    private void sendPosthogEvent(XMessage xMessage, String telemetryEvent)throws Exception{
+    private void sendPosthogEvent(XMessage xMessage, String telemetryEvent, XMessagePayload questionPayload) throws Exception {
+        /* Get Previous question XMessage */
+        getLatestXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
+                .subscribe(new Consumer<XMessageDAO>() {
+                    @Override
+                    public void accept(XMessageDAO xMsgDao) {
+                        log.info("found xMsgDao");
+
+                        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+
+                        /* local date time */
+                        LocalDateTime localNow = LocalDateTime.now();
+                        String current = fmt.format(localNow).toString();
+                        LocalDateTime currentDateTime = LocalDateTime.parse(current, fmt);
+                        LocalDateTime timestamp = xMsgDao.getTimestamp();
+                        long diff_milis = ChronoUnit.MILLIS.between(timestamp, currentDateTime);
+                        long diff_secs = ChronoUnit.SECONDS.between(timestamp, currentDateTime);
+
+                        log.info(
+                                "xMsgDao Id: " + xMsgDao.getId() + ", userId: " + xMsgDao.getUserId() + ", Timestamp: " + xMsgDao.getTimestamp()
+                                        + ", XMessage stylingTag: " + questionPayload.getStylingTag() + ", flow: " + questionPayload.getFlow() + ", index: " + questionPayload.getQuestionIndex()
+                                        + ", currentDateTime: " + currentDateTime + ", timestamp: " + timestamp + ", diff seconds: " + diff_secs + ", diff millis: " + diff_milis);
+
+                        if (questionPayload.getFlow() != null
+                                && !questionPayload.getFlow().isEmpty()
+                                && questionPayload.getQuestionIndex() != null) {
+                            posthogService.sendDropOffEvent(
+                                            xMsgDao.getUserId(), questionPayload.getFlow().toString(),
+                                            questionPayload.getQuestionIndex(), diff_milis)
+                                    .subscribe(new Consumer<String>() {
+                                        @Override
+                                        public void accept(String t) {
+                                            // TODO Auto-generated method stub
+                                            log.info("telemetry response: " + t);
+                                        }
+                                    });
+                        } else {
+                            log.info("Posthog telemetry event not being sent for flow: " + questionPayload.getFlow() + ", index: " + questionPayload.getQuestionIndex());
+                        }
+                    }
+                });
         posthogService.sendTelemetryEvent(xMessage.getTo().getUserID(), telemetryEvent).subscribe(new Consumer<String>() {
             @Override
             public void accept(String t) {
