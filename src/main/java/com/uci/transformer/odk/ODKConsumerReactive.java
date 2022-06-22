@@ -101,11 +101,11 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${telemetry}")
     public String telemetryTopic;
 
-    @Value("${exhaust.telemetry}")
-    public String exhaustTelemetry;
+    @Value("${exhaust.telemetry.enabled}")
+    public String exhaustTelemetryEnabled;
 
-    @Value("${posthog.event}")
-    public String posthogEvent;
+    @Value("${posthog.event.enabled}")
+    public String posthogEventEnabled;
 
     @Autowired
     public SimpleProducer kafkaProducer;
@@ -585,10 +585,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 xMessage.getTo().getEncryptedDeviceID(),
                                 xMessage.getMessageId().getChannelMessageId(),
                                 isEndOfForm(currentXPath));
-                if (telemetryEvent.equalsIgnoreCase("true")) {
+                if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
                     sendTelemetryEvent(telemetryEvent);
                 }
-                if (posthogEvent.equalsIgnoreCase("true")) {
+                if (posthogEventEnabled.equalsIgnoreCase("true")) {
                     sendPosthogEvent(xMessage, telemetryEvent, questionPayload);
                 }
             }
@@ -612,11 +612,23 @@ public class ODKConsumerReactive extends TransformerProvider {
                 });
     }
 
+    /**
+     * Send the telemetry event for exhaust
+     * @param telemetryEvent
+     * @throws Exception
+     */
     private void sendTelemetryEvent(String telemetryEvent) throws Exception {
         System.out.println(telemetryEvent);
         kafkaProducer.send(telemetryTopic, telemetryEvent);
     }
 
+    /**
+     * Send the posthog event for posthog and telemetry
+     * @param xMessage
+     * @param telemetryEvent
+     * @param questionPayload
+     * @throws Exception
+     */
     private void sendPosthogEvent(XMessage xMessage, String telemetryEvent, XMessagePayload questionPayload) throws Exception {
         /* Get Previous question XMessage */
         getLatestXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
