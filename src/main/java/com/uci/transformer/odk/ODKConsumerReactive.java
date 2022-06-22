@@ -604,7 +604,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                         }
                     });
                 
-        		saveTelemetryEvent(transformer, xMessage, assessment, questionPayload, currentXPath);
+        		sendTelemetryEvent(transformer, xMessage, assessment, questionPayload, currentXPath);
 
             }
         } catch (Exception e) {
@@ -627,7 +627,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 });
     }
 
-    private void saveTelemetryEvent(Transformer transformer, XMessage xMessage, Assessment assessment, XMessagePayload questionPayload, String currentXPath) throws Exception {
+    private void sendTelemetryEvent(Transformer transformer, XMessage xMessage, Assessment assessment, XMessagePayload questionPayload, String currentXPath) throws Exception {
         String telemetryEvent = new AssessmentTelemetryBuilder()
                 .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
                         xMessage.getChannel(),
@@ -643,6 +643,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                         isEndOfForm(currentXPath));
         System.out.println(telemetryEvent);
         kafkaProducer.send(telemetryTopic, telemetryEvent);
+        sendPosthogEvent(xMessage, telemetryEvent);
+    }
+
+    private void sendPosthogEvent(XMessage xMessage, String telemetryEvent)throws Exception{
         posthogService.sendTelemetryEvent(xMessage.getTo().getUserID(), telemetryEvent).subscribe(new Consumer<String>() {
             @Override
             public void accept(String t) {
