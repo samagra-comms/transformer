@@ -38,7 +38,7 @@ public class AssessmentTelemetryBuilder {
 
 	public String build(String botOrg, String channel, String provider, String producerID, String conversationOwnerID,
 			Question question, Assessment assessment, XMessagePayload questionPayload, long duration, String encyptedDeviceId,
-			String msgid, Boolean formEnd) {
+			String msgid, Boolean formEnd, UUID sessionId) {
 //		ArrayList<ButtonChoice> buttonChoices = getQuestionChoices(questionPayload.getButtonChoices());
 		ArrayList<ButtonChoice> buttonChoices = questionPayload.getButtonChoices();
 		String questionType = getQuestionType(buttonChoices);
@@ -51,6 +51,7 @@ public class AssessmentTelemetryBuilder {
 		cdata.add(setCdataItemMap("Conversation", assessment.getBotID().toString()));
 		cdata.add(setCdataItemMap("XPath", xPath));
 		cdata.add(setCdataItemMap("FormEnd", formEnd.toString()));
+		cdata.add(setCdataItemMap("SessionId", sessionId.toString()));
 		
 		
 		//Context Rollup
@@ -59,6 +60,7 @@ public class AssessmentTelemetryBuilder {
 		rollup.put("l2", assessment.getBotID().toString()); //Conversation value
 		rollup.put("l3", xPath);
 		rollup.put("l4", formEnd.toString());
+		rollup.put("l5", sessionId.toString());
 		
 		String channelName = (botOrg.equalsIgnoreCase("Anonymous")) || botOrg.isEmpty() ? DIKSHA_ORG : botOrg;
 		String userID = "";
@@ -88,6 +90,7 @@ public class AssessmentTelemetryBuilder {
 		questionRollup.put("l2", "BotID");
 		questionRollup.put("l3", "QuestionXPath");
 		questionRollup.put("l4", "FormEnd");
+		questionRollup.put("l5", "sessionId");
 		
 		//Object
 		Target object = Target.builder().id(question.getId().toString()).type(question.getQuestionType().name())

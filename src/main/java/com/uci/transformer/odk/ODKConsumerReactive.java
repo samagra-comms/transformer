@@ -569,22 +569,20 @@ public class ODKConsumerReactive extends TransformerProvider {
         		
                 log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
 
-
-
-
                 String telemetryEvent = new AssessmentTelemetryBuilder()
                         .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
                                 xMessage.getChannel(),
                                 xMessage.getProvider(),
                                 producerID,
-                                getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                getTransformerMetaDataValue(transformer, "botOwnerID"),
                                 assessment.getQuestion(),
                                 assessment,
                                 questionPayload,
                                 0,
                                 xMessage.getTo().getEncryptedDeviceID(),
                                 xMessage.getMessageId().getChannelMessageId(),
-                                isEndOfForm(currentXPath));
+                                isEndOfForm(currentXPath),
+                                xMessage.getSessionId());
                 if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
                     sendTelemetryEvent(telemetryEvent);
                 }
