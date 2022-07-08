@@ -214,16 +214,14 @@ public class ODKConsumerReactive extends TransformerProvider {
                         JSONObject camp = null; //  is not being used in menumanager, only being added in constructor
                         // Remove camp from MenuManager construction
 
-                        JSONObject user = userService.getUserByPhoneFromFederatedServers(
-                                getTransformerMetaDataValue(transformer, "botId"),
-                                xMessage.getTo().getUserID()
-                        );
+//                        JSONObject user = userService.getUserByPhoneFromFederatedServers(
+//                                getTransformerMetaDataValue(transformer, "botId"),
+//                                xMessage.getTo().getUserID()
+//                        );
+                        JSONObject user = new JSONObject();
+                        user.put("is_registered", "no");
                         log.info("Federated User by phone : "+user);
-//                        try {
-//                            camp = new JSONObject(mapper.writeValueAsString(campaign));
-//                        } catch (JsonProcessingException e) {
-//                            e.printStackTrace();
-//                        }
+
                         String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
                         ArrayNode hiddenFields = null;
                         try{
@@ -231,14 +229,12 @@ public class ODKConsumerReactive extends TransformerProvider {
                             log.info("hiddenFields: "+hiddenFields);
                         } catch (Exception ex) {
                             log.error("Exception in hidden fields read: "+ex.getMessage());
-//                            ex.printStackTrace();
                         }
 
                         String instanceXMlPrevious = "";
                         Boolean prefilled;
                         String answer;
                         if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
-//                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                             previousMeta.currentAnswer = assesGoToStartChar;
                             ServiceResponse serviceResponse = new MenuManager(null,
                                     null, null, formPath, formID, false,
