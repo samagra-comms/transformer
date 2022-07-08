@@ -1,8 +1,6 @@
 package com.uci.transformer.application;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.uci.utils.CampaignService;
-import com.uci.utils.kafka.ReactiveProducer;
 import io.fusionauth.client.FusionAuthClient;
 
 import org.apache.http.auth.AuthScope;
@@ -21,17 +19,12 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.kafka.receiver.KafkaReceiver;
 import reactor.kafka.receiver.ReceiverOptions;
@@ -39,7 +32,6 @@ import reactor.kafka.receiver.ReceiverRecord;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -83,16 +75,6 @@ public class AppConfiguration {
     @Bean
     public FusionAuthClient getFAClient() {
         return new FusionAuthClient(FUSIONAUTH_KEY, FUSIONAUTH_URL);
-    }
-
-    @Bean
-    public CampaignService getCampaignService() {
-        System.out.println("Inside getCampaignService :: " + CAMPAIGN_ADMIN_TOKEN + " :: " + CAMPAIGN_URL);
-        WebClient webClient = WebClient.builder()
-                .baseUrl(CAMPAIGN_URL)
-                .defaultHeader("admin-token", CAMPAIGN_ADMIN_TOKEN)
-                .build();
-        return new CampaignService(webClient, getFAClient(), cache);
     }
 
     @Bean

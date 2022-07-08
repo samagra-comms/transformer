@@ -1,16 +1,12 @@
 package com.uci.transformer.odk;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.collect.Maps;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
+import com.uci.utils.BotService;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
@@ -22,19 +18,15 @@ import com.uci.transformer.odk.repository.AssessmentRepository;
 import com.uci.transformer.odk.repository.MessageRepository;
 import com.uci.transformer.odk.repository.QuestionRepository;
 import com.uci.transformer.odk.repository.StateRepository;
-import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.FormInstanceUpdation;
 import com.uci.transformer.telemetry.AssessmentTelemetryBuilder;
-import com.uci.utils.CampaignService;
 import com.uci.utils.cache.service.RedisCacheService;
 import com.uci.utils.kafka.SimpleProducer;
 import com.uci.utils.telemetry.service.PosthogService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import messagerosa.core.model.ButtonChoice;
 import messagerosa.core.model.LocationParams;
-import messagerosa.core.model.SenderReceiverInfo;
 import messagerosa.core.model.Transformer;
 import messagerosa.core.model.XMessage;
 import messagerosa.core.model.XMessage.MessageState;
@@ -43,19 +35,14 @@ import messagerosa.xml.XMessageParser;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
-import org.springframework.util.FileCopyUtils;
 import org.springframework.web.client.RestTemplate;
-import reactor.blockhound.BlockHound;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
@@ -63,24 +50,15 @@ import reactor.util.function.Tuple2;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import static messagerosa.core.model.XMessage.MessageState.NOT_SENT;
-import static messagerosa.core.model.XMessage.MessageType.HSM;
 
 @Component
 @RequiredArgsConstructor
@@ -134,7 +112,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     private RestTemplate restTemplate;
 
     @Autowired
-    CampaignService campaignService;
+    BotService botService;
     
     @Autowired
     UserService userService;
@@ -357,8 +335,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                             String nextBotID = mm.getNextBotID(response[0].currentIndex);
 
                             return Mono.zip(
-                                    campaignService.getBotNameByBotID(nextBotID),
-                                    campaignService.getFirstFormByBotID(nextBotID)
+                                    botService.getBotNameByBotID(nextBotID),
+                                    botService.getFirstFormByBotID(nextBotID)
                             ).map(new Function<Tuple2<String, String>, Mono<XMessage>>() {
                                 @Override
                                 public Mono<XMessage> apply(Tuple2<String, String> objects) {
