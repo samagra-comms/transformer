@@ -7,6 +7,7 @@ import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
 import com.uci.utils.BotService;
+import com.uci.utils.bot.util.BotUtil;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
@@ -235,6 +236,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                         Boolean prefilled;
                         String answer;
                         if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
+                            /* If bot restarted - create new session id */
+                            if(previousMeta.currentAnswer.equals(assesGoToStartChar)) {
+                                xMessage.setSessionId(BotUtil.newConversationSessionId());
+                            }
                             previousMeta.currentAnswer = assesGoToStartChar;
                             ServiceResponse serviceResponse = new MenuManager(null,
                                     null, null, formPath, formID, false,
