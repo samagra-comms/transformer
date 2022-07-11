@@ -17,6 +17,7 @@ public class ServiceResponse {
     String formID;
     Question question;
     ArrayList<Integer> conversationLevel;
+    Boolean validResponse;
 
     public ServiceResponse(String currentIndex, XMessagePayload nextMessage, String currentResponseState, String formVersion) {
         this.currentIndex = currentIndex;
@@ -25,7 +26,7 @@ public class ServiceResponse {
         this.formVersion = formVersion;
     }
     
-    public ServiceResponse(String currentIndex, XMessagePayload nextMessage, String currentResponseState, String formVersion, String formID, Question question, ArrayList<Integer> conversationLevel) {
+    public ServiceResponse(String currentIndex, XMessagePayload nextMessage, String currentResponseState, String formVersion, String formID, Question question, ArrayList<Integer> conversationLevel, Boolean validResponse) {
         this.currentIndex = currentIndex;
         this.nextMessage = nextMessage;
         this.currentResponseState = currentResponseState;
@@ -33,6 +34,7 @@ public class ServiceResponse {
         this.formID = formID;
         this.question = question;
         this.conversationLevel = conversationLevel;
+        this.validResponse = validResponse;
     }
 
     public String getCurrentIndex() {
