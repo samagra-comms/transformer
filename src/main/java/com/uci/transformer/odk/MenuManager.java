@@ -405,7 +405,9 @@ public class MenuManager {
 			conversationLevel.add(nextIndex);
 		}
         
-		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
+		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel,
+                saveStatus.getSaveStatus() == ANSWER_OK ? true : false
+        );
     }
     
     private String getFormLanguageCache() {

@@ -349,7 +349,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         xMessage,
                                         response[0].question,
                                         prevQuestion,
-                                        response[0].currentIndex
+                                        response[0].currentIndex,
+                                        response[0].validResponse
                                 );
 
 
@@ -482,7 +483,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
                                                                             Transformer transformer, XMessage xMessage, Question question, Question prevQuestion,
-                                                                            String currentXPath) {
+                                                                            String currentXPath, Boolean validResponse) {
         return previousQuestions
                 .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
                     @Override
@@ -490,7 +491,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                         if (existingQuestionStatus.getLeft()) {
                         	log.info("Found Question id: "+existingQuestionStatus.getRight().get(0).getId()+", xPath: "+existingQuestionStatus.getRight().get(0).getXPath());
                         	saveAssessmentData(
-                                    existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath).subscribe(new Consumer<Assessment>() {
+                                    existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
                                 @Override
                                 public void accept(Assessment assessment) {
                                     log.info("Assessment Saved Successfully {}", assessment.getId());
@@ -508,7 +509,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 public void accept(Question question) {
                                 	log.info("Question Saved Successfully, id: "+question.getId()+", xPath: "+question.getXPath());
                                 	saveAssessmentData(
-                                            existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath).subscribe(new Consumer<Assessment>() {
+                                            existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
                                         @Override
                                         public void accept(Assessment assessment) {
                                             log.info("Assessment Saved Successfully {}", assessment.getId());
@@ -544,7 +545,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Mono<Assessment> saveAssessmentData(Pair<Boolean, List<Question>> existingQuestionStatus,
                                                 String formID, FormManagerParams previousMeta,
                                                 Transformer transformer, XMessage xMessage, Question question,
-                                                String currentXPath) {
+                                                String currentXPath, Boolean validResponse) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
         
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
@@ -568,7 +569,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         		
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
 
-                sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath);
+                sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath, validResponse);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -591,7 +592,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     private void sendEvents(XMessage xMessage, XMessagePayload questionPayload, Assessment assessment, Transformer transformer,
-                            String currentXPath) throws Exception {
+                            String currentXPath, Boolean validResponse) throws Exception {
         log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
 
         /* Get Previous question XMessage */
@@ -623,7 +624,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                    /* Last sent message timestamp  */
                                    LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
                                    long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
-//                                   long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
+                                   long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
                                    String telemetryEvent = new AssessmentTelemetryBuilder()
                                            .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
                                                    xMessage.getChannel(),
@@ -633,11 +634,12 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                    assessment.getQuestion(),
                                                    assessment,
                                                    questionPayload,
-                                                   diff_milis,
+                                                   diff_secs,
                                                    xMessage.getTo().getEncryptedDeviceID(),
                                                    xMessage.getMessageId().getChannelMessageId(),
                                                    isEndOfForm(currentXPath),
-                                                   xMessage.getSessionId());
+                                                   xMessage.getSessionId(),
+                                                   validResponse);
                                    log.info("Telemetry Event: " +telemetryEvent);
                                    if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
                                        try {
