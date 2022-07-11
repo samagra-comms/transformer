@@ -51,13 +51,11 @@ import reactor.util.function.Tuple2;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -461,7 +459,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
                                                                             Transformer transformer, XMessage xMessage, Question question, Question prevQuestion,
-                                                                            String currentXPath) {
+                                                                            String currentXPath, Boolean validResponse) {
         return previousQuestions
                 .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
                     @Override
