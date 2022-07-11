@@ -68,14 +68,11 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -261,6 +258,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                         String answer;
                         if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
 //                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
+                            /* If bot restarted - create new session id */
+                            if(previousMeta.currentAnswer.equals(assesGoToStartChar)) {
+                                xMessage.setSessionId(UUID.randomUUID());
+                            }
                             previousMeta.currentAnswer = assesGoToStartChar;
                             ServiceResponse serviceResponse = new MenuManager(null,
                                     null, null, formPath, formID, false,
@@ -566,29 +567,8 @@ public class ODKConsumerReactive extends TransformerProvider {
         	if(question != null && !isStartingMessage) {
         		
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
-        		
-                log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
 
-                String telemetryEvent = new AssessmentTelemetryBuilder()
-                        .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                                xMessage.getChannel(),
-                                xMessage.getProvider(),
-                                producerID,
-                                getTransformerMetaDataValue(transformer, "botOwnerID"),
-                                assessment.getQuestion(),
-                                assessment,
-                                questionPayload,
-                                0,
-                                xMessage.getTo().getEncryptedDeviceID(),
-                                xMessage.getMessageId().getChannelMessageId(),
-                                isEndOfForm(currentXPath),
-                                xMessage.getSessionId());
-                if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
-                    sendTelemetryEvent(telemetryEvent);
-                }
-                if (posthogEventEnabled.equalsIgnoreCase("true")) {
-                    sendPosthogEvent(xMessage, telemetryEvent, questionPayload);
-                }
+                sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -610,90 +590,124 @@ public class ODKConsumerReactive extends TransformerProvider {
                 });
     }
 
+    private void sendEvents(XMessage xMessage, XMessagePayload questionPayload, Assessment assessment, Transformer transformer,
+                            String currentXPath) throws Exception {
+        log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
+
+        /* Get Previous question XMessage */
+        getLastSentXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
+                .subscribe(new Consumer<XMessageDAO>() {
+                               @Override
+                               public void accept(XMessageDAO xMsgDao) {
+                                   log.info("found xMsgDao");
+
+                                   DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+                                   LocalDateTime repliedTimestamp=null;
+                                   /* Convert replied timestamp to local date time format */
+                                   if(xMessage.getTimestamp() != null) {
+                                       try{
+                                           LocalDateTime repliedAt = new Timestamp(new Date(xMessage.getTimestamp()).getTime()).toLocalDateTime();
+                                           String repliedAtTime = fmt.format(repliedAt).toString();
+                                           repliedTimestamp = LocalDateTime.parse(repliedAtTime, fmt);
+                                       } catch (Exception ex) {
+                                           log.error("Exception when conversatin replied timestamp: "+ex.getMessage());
+                                       }
+                                   }
+                                   /* If replied timestamp is null, use current date time as replied timestamp */
+                                   if (repliedTimestamp == null) {
+                                       LocalDateTime localNow = LocalDateTime.now();
+                                       String current = fmt.format(localNow).toString();
+                                       repliedTimestamp = LocalDateTime.parse(current, fmt);
+                                   }
+
+                                   /* Last sent message timestamp  */
+                                   LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
+                                   long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
+//                                   long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
+                                   String telemetryEvent = new AssessmentTelemetryBuilder()
+                                           .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                                   xMessage.getChannel(),
+                                                   xMessage.getProvider(),
+                                                   producerID,
+                                                   getTransformerMetaDataValue(transformer, "botOwnerID"),
+                                                   assessment.getQuestion(),
+                                                   assessment,
+                                                   questionPayload,
+                                                   diff_milis,
+                                                   xMessage.getTo().getEncryptedDeviceID(),
+                                                   xMessage.getMessageId().getChannelMessageId(),
+                                                   isEndOfForm(currentXPath),
+                                                   xMessage.getSessionId());
+                                   log.info("Telemetry Event: " +telemetryEvent);
+                                   if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
+                                       try {
+                                           sendExhaustEvent(telemetryEvent);
+                                       } catch (Exception e) {
+                                           log.error("Exception in exhaust event: "+e.getMessage());
+                                       }
+                                   }
+                                   if (posthogEventEnabled.equalsIgnoreCase("true")) {
+                                       try {
+                                           sendPosthogEvent(xMessage, telemetryEvent, questionPayload, diff_milis);
+                                       } catch (Exception e) {
+                                           log.error("Exception in posthog event: "+e.getMessage());
+                                       }
+                                   }
+                               }
+                });
+    }
+
     /**
      * Send the telemetry event for exhaust
      * @param telemetryEvent
      * @throws Exception
      */
-    private void sendTelemetryEvent(String telemetryEvent) throws Exception {
-        System.out.println(telemetryEvent);
+    private void sendExhaustEvent(String telemetryEvent) throws Exception {
         kafkaProducer.send(telemetryTopic, telemetryEvent);
     }
 
     /**
-     * Send the posthog event for posthog and telemetry
+     * Send the telemetry & dropoff event to posthog
      * @param xMessage
      * @param telemetryEvent
      * @param questionPayload
+     * @param diff_milis
      * @throws Exception
      */
-    private void sendPosthogEvent(XMessage xMessage, String telemetryEvent, XMessagePayload questionPayload) throws Exception {
-        /* Get Previous question XMessage */
-        getLatestXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
-                .subscribe(new Consumer<XMessageDAO>() {
-                    @Override
-                    public void accept(XMessageDAO xMsgDao) {
-                        log.info("found xMsgDao");
-
-                        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-                        /* local date time */
-                        LocalDateTime localNow = LocalDateTime.now();
-                        String current = fmt.format(localNow).toString();
-                        LocalDateTime currentDateTime = LocalDateTime.parse(current, fmt);
-                        LocalDateTime timestamp = xMsgDao.getTimestamp();
-                        long diff_milis = ChronoUnit.MILLIS.between(timestamp, currentDateTime);
-                        long diff_secs = ChronoUnit.SECONDS.between(timestamp, currentDateTime);
-
-                        log.info(
-                                "xMsgDao Id: " + xMsgDao.getId() + ", userId: " + xMsgDao.getUserId() + ", Timestamp: " + xMsgDao.getTimestamp()
-                                        + ", XMessage stylingTag: " + questionPayload.getStylingTag() + ", flow: " + questionPayload.getFlow() + ", index: " + questionPayload.getQuestionIndex()
-                                        + ", currentDateTime: " + currentDateTime + ", timestamp: " + timestamp + ", diff seconds: " + diff_secs + ", diff millis: " + diff_milis);
-
-                        if (questionPayload.getFlow() != null
-                                && !questionPayload.getFlow().isEmpty()
-                                && questionPayload.getQuestionIndex() != null) {
-                            posthogService.sendDropOffEvent(
-                                            xMsgDao.getUserId(), questionPayload.getFlow().toString(),
-                                            questionPayload.getQuestionIndex(), diff_milis)
-                                    .subscribe(new Consumer<String>() {
-                                        @Override
-                                        public void accept(String t) {
-                                            // TODO Auto-generated method stub
-                                            log.info("telemetry response: " + t);
-                                        }
-                                    });
-                        } else {
-                            log.info("Posthog telemetry event not being sent for flow: " + questionPayload.getFlow() + ", index: " + questionPayload.getQuestionIndex());
-                        }
-                    }
-                });
+    private void sendPosthogEvent(XMessage xMessage, String telemetryEvent, XMessagePayload questionPayload, Long diff_milis) throws Exception {
+        /* Send Telemetry event to posthog */
         posthogService.sendTelemetryEvent(xMessage.getTo().getUserID(), telemetryEvent).subscribe(new Consumer<String>() {
             @Override
             public void accept(String t) {
                 // TODO Auto-generated method stub
-                log.info("telemetry response: " + t);
+                log.info("Posthog telemetry event response: " + t);
             }
         });
+
+        /* Send drop off event to posthog, if flow & question index exists */
+        if (questionPayload.getFlow() != null
+                && !questionPayload.getFlow().isEmpty()
+                && questionPayload.getQuestionIndex() != null) {
+            posthogService.sendDropOffEvent(
+                            xMessage.getTo().getUserID(), questionPayload.getFlow().toString(),
+                            questionPayload.getQuestionIndex(), diff_milis)
+                    .subscribe(new Consumer<String>() {
+                        @Override
+                        public void accept(String t) {
+                            // TODO Auto-generated method stub
+                            log.info("Posthog dropoff event response: " + t);
+                        }
+                    });
+        }
     }
-    
-    private Flux<XMessageDAO> getLatestXMessage(String appName, String userID) {
-    	try {
-            XMessageDAO xMessageDAO = (XMessageDAO)redisCacheService.getXMessageDaoCache(userID);
-    	  	if(xMessageDAO != null) {
-    	  		log.info("redis key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
-    	  		log.info("Redis xMsgDao id: "+xMessageDAO.getId()+", dao app: "+xMessageDAO.getApp()
-    			+", From id: "+xMessageDAO.getFromId()+", user id: "+xMessageDAO.getUserId()
-    			+", xMessage: "+xMessageDAO.getXMessage()+", status: "+xMessageDAO.getMessageState()+
-    			", timestamp: "+xMessageDAO.getTimestamp());
-    	  		return Flux.just(xMessageDAO);
-    	  	} else {
-    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("XMessageDAO")+", "+redisKeyWithPrefix(userID));
-    	  	}
-    	} catch (Exception e) {
-    		log.error("Exception in redis data fetch: "+e.getMessage());   	
-    	}
-    	
+
+    /**
+     * Get Last XMessage sent to user from admin
+     * @param appName
+     * @param userID
+     * @return
+     */
+    private Flux<XMessageDAO> getLastSentXMessage(String appName, String userID) {
     	return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
     }
 
