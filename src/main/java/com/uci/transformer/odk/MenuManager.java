@@ -2,6 +2,7 @@ package com.uci.transformer.odk;
 
 import java.util.Arrays;
 
+import com.uci.adapter.utils.CommonUtils;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
@@ -1225,9 +1226,20 @@ public class MenuManager {
         		if(attribute.getName().equals("stylingTags")) {
         			String tagText = attribute.getAttributeValue().toString();
         			StylingTag tag = StylingTag.getEnumByText(tagText);
-        			if(tag != null) {
-        				payload.setStylingTag(tag);
-        			}
+        			if(tag != null ) {
+                        if(CommonUtils.isStylingTagPublicMediaType(tag) || CommonUtils.isStylingTagCdnMediaType(tag)) {
+                            MessageMedia media = payload.getMedia();
+                            if(media == null) {
+                                media = new MessageMedia();
+                            }
+                            media.setUrl(payload.getText());
+                            media.setCategory(CommonUtils.getMediaCategoryFromStylingTag(tag));
+                            payload.setMedia(media);
+                        } else {
+                            payload.setStylingTag(tag);
+                        }
+
+                    }
         		} else if(attribute.getName().equals("flow")) {
         			payload.setFlow(attribute.getAttributeValue().toString());
         		} else if(attribute.getName().equals("index")) {
@@ -1237,7 +1249,13 @@ public class MenuManager {
         				log.info("Exception in getPayloadWithBindTags for parse int: "+e.getMessage());
         			}
         		} else if(attribute.getName().equals("caption")) {
-        			payload.setMediaCaption(attribute.getAttributeValue().toString());
+                    MessageMedia media = payload.getMedia();
+                    if(media == null) {
+                        media = new MessageMedia();
+                    }
+                    media.setText(attribute.getAttributeValue());
+                    payload.setMedia(media);
+//        			payload.setMediaCaption(attribute.getAttributeValue());
         		} 
         	});
     	} catch (Exception e) {
