@@ -40,6 +40,11 @@
 			<name>GitHub Packages</name>
 			<url>https://maven.pkg.github.com/samagra-comms/dao</url>
 		</repository>
+		<repository>
+			<id>github-adapter</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/samagra-comms/adapter</url>
+		</repository>
 	</repositories>
 
 	<dependencies>
@@ -162,6 +167,11 @@
             <artifactId>dao</artifactId>
             <version>2.0.0</version>
         </dependency>
+		<dependency>
+			<groupId>com.uci</groupId>
+			<artifactId>adapter</artifactId>
+			<version>4.9.0</version>
+		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->
 		<dependency>
