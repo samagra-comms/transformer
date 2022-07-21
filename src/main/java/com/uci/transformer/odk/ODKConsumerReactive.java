@@ -11,6 +11,8 @@ import com.jayway.jsonpath.PathNotFoundException;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
+import com.uci.utils.cdn.FileCdnFactory;
+import com.uci.utils.cdn.FileCdnProvider;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
@@ -152,6 +154,9 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Autowired
     public RedisCacheService redisCacheService;
 
+    @Autowired
+    public FileCdnFactory fileCdnFactory;
+
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
         reactiveKafkaReceiver
@@ -276,7 +281,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
                                     +instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
                             mm = new MenuManager(null, null, instanceXMlPrevious,
-                                    formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload());
+                                    formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload(), fileCdnFactory.getFileCdnProvider());
                             response[0] = mm.start();
                         } else {
                             FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
@@ -309,7 +314,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
-                                        prefilled, questionRepo, user, true, redisCacheService, xMessage);
+                                        prefilled, questionRepo, user, true, redisCacheService, xMessage, fileCdnFactory.getFileCdnProvider());
                             }else{
                                 prefilled = false;
                                 answer = previousMeta.currentAnswer;
@@ -319,7 +324,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
-                                        prefilled, questionRepo, user, true, redisCacheService, xMessage);
+                                        prefilled, questionRepo, user, true, redisCacheService, xMessage, fileCdnFactory.getFileCdnProvider());
                             }
                             response[0] = mm.start();
                         }
