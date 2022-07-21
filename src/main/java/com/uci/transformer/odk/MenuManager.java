@@ -11,6 +11,7 @@ import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.Item;
 import com.uci.utils.cache.service.RedisCacheService;
 
+import com.uci.utils.cdn.FileCdnProvider;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
@@ -93,8 +94,12 @@ public class MenuManager {
     RedisCacheService redisCacheService;
     String userID;
     String appID;
+    FileCdnProvider fileCdnProvider;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath,
+                       String formID, RedisCacheService redisCacheService,
+                       String userID, String appID, XMessagePayload payload,
+                       FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -106,6 +111,7 @@ public class MenuManager {
         this.userID = userID;
         this.appID = appID;
         this.payload = payload;
+        this.fileCdnProvider = fileCdnProvider;
         
         setAssesmentCharacters();
     }
@@ -148,7 +154,8 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg) {
+                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg,
+                       FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -163,6 +170,7 @@ public class MenuManager {
         this.userID = xMsg.getTo().getUserID();
         this.appID = xMsg.getApp();
         this.payload = xMsg.getPayload();
+        this.fileCdnProvider = fileCdnProvider;
         
         setAssesmentCharacters();
     }
@@ -1227,7 +1235,8 @@ public class MenuManager {
         			String tagText = attribute.getAttributeValue().toString();
         			StylingTag tag = StylingTag.getEnumByText(tagText);
         			if(tag != null ) {
-                        if(CommonUtils.isStylingTagPublicMediaType(tag) || CommonUtils.isStylingTagCdnMediaType(tag)) {
+                        /* If styling tag is media type & correspond to a valid media category */
+                        if(CommonUtils.isStylingTagMediaType(tag) && CommonUtils.getMediaCategoryFromStylingTag(tag) != null) {
                             MessageMedia media = payload.getMedia();
                             if(media == null) {
                                 media = new MessageMedia();
@@ -1255,9 +1264,43 @@ public class MenuManager {
                     }
                     media.setText(attribute.getAttributeValue());
                     payload.setMedia(media);
-//        			payload.setMediaCaption(attribute.getAttributeValue());
         		} 
         	});
+
+            /* Media cdn url or public url find, else set text only */
+            if(payload.getMedia() != null && payload.getMedia().getUrl() != null
+                    && !payload.getMedia().getUrl().isEmpty()
+                    && payload.getMedia().getCategory() != null) {
+                MessageMedia media = payload.getMedia();
+                String mediaUrl = media.getUrl().replace("\n", "").replace("<br>", "").trim();
+                if (CommonUtils.isTextAUrl(mediaUrl)) {
+                    mediaUrl = mediaUrl.trim();
+                } else if (fileCdnProvider != null) {
+                    mediaUrl = fileCdnProvider.getFileSignedUrl(mediaUrl);
+                    if(!CommonUtils.isTextAUrl(mediaUrl)) {
+                        mediaUrl = "";
+                    }
+                } else {
+                    mediaUrl = "";
+                }
+
+                if(mediaUrl != null && !mediaUrl.isEmpty()) {
+                    media.setUrl(mediaUrl);
+                    if (media.getCategory().equals(MediaCategory.IMAGE) || media.getCategory().equals(MediaCategory.FILE)) {
+                        /* Default caption */
+                        if (media.getText() == null || media.getText().isEmpty()) {
+                            media.setText(media.getCategory().toString());
+                        }
+                    }
+                    payload.setMedia(media);
+                } else {
+                    payload.setText(media.getUrl().trim());
+                    payload.setMedia(null);
+                }
+            } else {
+                payload.setMedia(null);
+            }
+
     	} catch (Exception e) {
     		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
     	}
