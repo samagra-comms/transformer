@@ -8,6 +8,7 @@ import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
 import com.uci.utils.BotService;
 import com.uci.utils.bot.util.BotUtil;
+import com.uci.utils.cdn.FileCdnFactory;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
