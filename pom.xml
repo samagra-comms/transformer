@@ -106,11 +106,11 @@
 			<artifactId>r2dbc-postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
-<!--		<dependency>-->
-<!--			<groupId>org.liquibase</groupId>-->
-<!--			<artifactId>liquibase-core</artifactId>-->
-<!--			<version>3.8.9</version>-->
-<!--		</dependency>-->
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+			<version>3.8.9</version>
+		</dependency>
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
@@ -170,7 +170,7 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>adapter</artifactId>
-			<version>v4.10.0</version>
+			<version>4.10.0</version>
 		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->

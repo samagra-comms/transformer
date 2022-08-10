@@ -11,6 +11,7 @@ import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.Item;
 import com.uci.utils.cache.service.RedisCacheService;
 
+import com.uci.utils.cdn.FileCdnProvider;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
@@ -93,8 +94,12 @@ public class MenuManager {
     RedisCacheService redisCacheService;
     String userID;
     String appID;
+    FileCdnProvider fileCdnProvider;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
+    public MenuManager(String xpath, String answer, String instanceXML, String formPath,
+                       String formID, RedisCacheService redisCacheService,
+                       String userID, String appID, XMessagePayload payload,
+                       FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -106,6 +111,7 @@ public class MenuManager {
         this.userID = userID;
         this.appID = appID;
         this.payload = payload;
+        this.fileCdnProvider = fileCdnProvider;
         
         setAssesmentCharacters();
     }
@@ -148,7 +154,8 @@ public class MenuManager {
 
     public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
                        Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg) {
+                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg,
+                       FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -163,6 +170,7 @@ public class MenuManager {
         this.userID = xMsg.getTo().getUserID();
         this.appID = xMsg.getApp();
         this.payload = xMsg.getPayload();
+        this.fileCdnProvider = fileCdnProvider;
         
         setAssesmentCharacters();
     }
@@ -406,7 +414,9 @@ public class MenuManager {
 			conversationLevel.add(nextIndex);
 		}
         
-		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel);
+		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel,
+                saveStatus.getSaveStatus() == ANSWER_OK ? true : false
+        );
     }
     
     private String getFormLanguageCache() {
@@ -1221,10 +1231,10 @@ public class MenuManager {
     	log.info("Bind Attributes: "+bindAttributes);
     	try {
     		bindAttributes.forEach(attribute -> {
-                if(attribute.getName().equals("stylingTags")) {
-                    String tagText = attribute.getAttributeValue().toString();
-                    StylingTag tag = StylingTag.getEnumByText(tagText);
-                    if(tag != null ) {
+        		if(attribute.getName().equals("stylingTags")) {
+        			String tagText = attribute.getAttributeValue().toString();
+        			StylingTag tag = StylingTag.getEnumByText(tagText);
+        			if(tag != null ) {
                         /* If styling tag is media type & correspond to a valid media category */
                         if(CommonUtils.isStylingTagMediaType(tag) && CommonUtils.getMediaCategoryFromStylingTag(tag) != null) {
                             MessageMedia media = payload.getMedia();
@@ -1237,6 +1247,8 @@ public class MenuManager {
                         } else {
                             payload.setStylingTag(tag);
                         }
+
+                    }
         		} else if(attribute.getName().equals("flow")) {
         			payload.setFlow(attribute.getAttributeValue().toString());
         		} else if(attribute.getName().equals("index")) {
@@ -1255,9 +1267,6 @@ public class MenuManager {
                         // payload.setMediaCaption(attribute.getAttributeValue().toString());
         		} 
         	});
-    	} catch (Exception e) {
-    		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
-    	}
 
             /* Media cdn url or public url find, else set text only */
             if(payload.getMedia() != null && payload.getMedia().getUrl() != null
@@ -1292,6 +1301,10 @@ public class MenuManager {
             } else {
                 payload.setMedia(null);
             }
+
+    	} catch (Exception e) {
+    		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
+    	}
     	
     	return payload;
     }
