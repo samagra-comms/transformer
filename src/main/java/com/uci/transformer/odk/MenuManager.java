@@ -2,6 +2,7 @@ package com.uci.transformer.odk;
 
 import java.util.Arrays;
 
+import com.uci.adapter.utils.CommonUtils;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
@@ -1220,12 +1221,22 @@ public class MenuManager {
     	log.info("Bind Attributes: "+bindAttributes);
     	try {
     		bindAttributes.forEach(attribute -> {
-        		if(attribute.getName().equals("stylingTags")) {
-        			String tagText = attribute.getAttributeValue().toString();
-        			StylingTag tag = StylingTag.getEnumByText(tagText);
-        			if(tag != null) {
-        				payload.setStylingTag(tag);
-        			}
+                if(attribute.getName().equals("stylingTags")) {
+                    String tagText = attribute.getAttributeValue().toString();
+                    StylingTag tag = StylingTag.getEnumByText(tagText);
+                    if(tag != null ) {
+                        /* If styling tag is media type & correspond to a valid media category */
+                        if(CommonUtils.isStylingTagMediaType(tag) && CommonUtils.getMediaCategoryFromStylingTag(tag) != null) {
+                            MessageMedia media = payload.getMedia();
+                            if(media == null) {
+                                media = new MessageMedia();
+                            }
+                            media.setUrl(payload.getText());
+                            media.setCategory(CommonUtils.getMediaCategoryFromStylingTag(tag));
+                            payload.setMedia(media);
+                        } else {
+                            payload.setStylingTag(tag);
+                        }
         		} else if(attribute.getName().equals("flow")) {
         			payload.setFlow(attribute.getAttributeValue().toString());
         		} else if(attribute.getName().equals("index")) {
@@ -1235,12 +1246,52 @@ public class MenuManager {
         				log.info("Exception in getPayloadWithBindTags for parse int: "+e.getMessage());
         			}
         		} else if(attribute.getName().equals("caption")) {
-        			payload.setMediaCaption(attribute.getAttributeValue().toString());
+                        MessageMedia media = payload.getMedia();
+                        if(media == null) {
+                            media = new MessageMedia();
+                        }
+                        media.setText(attribute.getAttributeValue());
+                        payload.setMedia(media);
+                        // payload.setMediaCaption(attribute.getAttributeValue().toString());
         		} 
         	});
     	} catch (Exception e) {
     		log.info("Exception in getPayloadWithBindTags: "+e.getMessage());
     	}
+
+            /* Media cdn url or public url find, else set text only */
+            if(payload.getMedia() != null && payload.getMedia().getUrl() != null
+                    && !payload.getMedia().getUrl().isEmpty()
+                    && payload.getMedia().getCategory() != null) {
+                MessageMedia media = payload.getMedia();
+                String mediaUrl = media.getUrl().replace("\n", "").replace("<br>", "").trim();
+                if (CommonUtils.isTextAUrl(mediaUrl)) {
+                    mediaUrl = mediaUrl.trim();
+                } else if (fileCdnProvider != null) {
+                    mediaUrl = fileCdnProvider.getFileSignedUrl(mediaUrl);
+                    if(!CommonUtils.isTextAUrl(mediaUrl)) {
+                        mediaUrl = "";
+                    }
+                } else {
+                    mediaUrl = "";
+                }
+
+                if(mediaUrl != null && !mediaUrl.isEmpty()) {
+                    media.setUrl(mediaUrl);
+                    if (media.getCategory().equals(MediaCategory.IMAGE) || media.getCategory().equals(MediaCategory.FILE)) {
+                        /* Default caption */
+                        if (media.getText() == null || media.getText().isEmpty()) {
+                            media.setText(media.getCategory().toString());
+                        }
+                    }
+                    payload.setMedia(media);
+                } else {
+                    payload.setText(media.getUrl().trim());
+                    payload.setMedia(null);
+                }
+            } else {
+                payload.setMedia(null);
+            }
     	
     	return payload;
     }
