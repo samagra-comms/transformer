@@ -1258,12 +1258,13 @@ public class MenuManager {
         				log.info("Exception in getPayloadWithBindTags for parse int: "+e.getMessage());
         			}
         		} else if(attribute.getName().equals("caption")) {
-                    MessageMedia media = payload.getMedia();
-                    if(media == null) {
-                        media = new MessageMedia();
-                    }
-                    media.setText(attribute.getAttributeValue());
-                    payload.setMedia(media);
+                        MessageMedia media = payload.getMedia();
+                        if(media == null) {
+                            media = new MessageMedia();
+                        }
+                        media.setText(attribute.getAttributeValue());
+                        payload.setMedia(media);
+                        // payload.setMediaCaption(attribute.getAttributeValue().toString());
         		} 
         	});
 
