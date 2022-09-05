@@ -1,6 +1,16 @@
 # Transformer
 A transformer is a stateless processing object that takes inputs and converts the input into a processed output. Transformers may in turn call external services if needed.&#x20;
 
+Transformers transforms the previous xMessage from the user to one that needs to be sent next. It is essentially a microservice that based on the previous user action, returns a new xMessage that will then be shown to the user. This also enables conversion from one type
+All inbound messages pass through a transformer. If a transformer is not assigned, then a null transformer is assigned to the xMessage. Since the current implementation of MessageRosa is only in Java, currently there is a limitation on the number of languages you can build the transformer on which right now is just Java.
+Simply put a transformer looks something like this 
+![image](https://user-images.githubusercontent.com/25716415/188440155-57ff1bbe-0a11-4362-bce7-cdd8b1f456a9.png)
+
+**Responsibilities**
+* Acts as a state machine and converts messages from one state to another.
+* Used to transform messages
+* Applies conversational logic (constraints or input format)
+
 To set things in prespetive the following block diagram below outlines various components that come together to form the Unified Communications Interface (UCI):
 
 ![image](https://user-images.githubusercontent.com/25716415/188420798-155fdd16-efcd-40f3-af69-bf4c49833295.png)
