@@ -3,6 +3,9 @@ A transformer is a stateless processing object that takes inputs and converts th
 
 Transformers transforms the previous xMessage from the user to one that needs to be sent next. It is essentially a microservice that based on the previous user action, returns a new xMessage that will then be shown to the user. This also enables conversion from one type
 All inbound messages pass through a transformer. If a transformer is not assigned, then a null transformer is assigned to the xMessage. Since the current implementation of MessageRosa is only in Java, currently there is a limitation on the number of languages you can build the transformer on which right now is just Java.
+
+More details can be found [here]([url](https://uci.sunbird.org/use/developer/uci-basics/transformers))
+
 Simply put a transformer looks something like this 
 ![image](https://user-images.githubusercontent.com/25716415/188440155-57ff1bbe-0a11-4362-bce7-cdd8b1f456a9.png)
 
