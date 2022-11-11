@@ -2,6 +2,7 @@ package com.uci.transformer.odk;
 
 import java.util.Arrays;
 
+import com.uci.adapter.cdn.FileCdnProvider;
 import com.uci.adapter.utils.CommonUtils;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
@@ -11,7 +12,6 @@ import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.Item;
 import com.uci.utils.cache.service.RedisCacheService;
 
-import com.uci.utils.cdn.FileCdnProvider;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
