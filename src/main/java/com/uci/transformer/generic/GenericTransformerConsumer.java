@@ -43,6 +43,9 @@ public class GenericTransformerConsumer {
     @Autowired
     public BotService botService;
 
+    @Value("${doubtnut.baseurl}")
+    public String url;
+
 
     @KafkaListener(id = "${generic-transformer}", topics = "${generic-transformer}", properties = {"spring.json.value.default.type=java.lang.String"})
     public void onMessage(@Payload String stringMessage) {
@@ -51,7 +54,6 @@ public class GenericTransformerConsumer {
             final long startTime = System.nanoTime();
             logTimeTaken(startTime, 0);
             XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
-            String url = "https://20003.stg.doubtnut.com";
             GenericOutboundMessage genericOutboundMessage = new GenericOutboundMessage();
             WebClient webClient = null;
             if (msg.getPayload() != null && msg.getPayload().getMedia() != null && msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
