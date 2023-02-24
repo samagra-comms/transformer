@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.uci</groupId>
 	<artifactId>transformer</artifactId>
-	<version>5.0.0</version>
+	<version>5.1.0</version>
 	<name>transformer</name>
 	<description>Demo project for Spring Boot</description>
 
@@ -155,22 +155,22 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>message-rosa</artifactId>
-			<version>5.0.0</version>
+			<version>5.1.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>utils</artifactId>
-			<version>5.0.0</version>
+			<version>5.1.0</version>
 		</dependency>
 		<dependency>
             <groupId>com.uci</groupId>
             <artifactId>dao</artifactId>
-            <version>5.0.0</version>
+            <version>5.1.0</version>
         </dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>adapter</artifactId>
-			<version>5.0.0</version>
+			<version>5.1.0</version>
 		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->
