@@ -56,18 +56,18 @@ public class GenericTransformerConsumer {
             XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
             GenericOutboundMessage genericOutboundMessage = new GenericOutboundMessage();
             WebClient webClient = null;
-            if (msg.getPayload() != null && msg.getPayload().getMedia() != null && msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+            if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
+                    || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
+                String msgType = null;
+                if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+                    msgType = "IMAGE";
+                } else if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
+                    msgType = "AUDIO";
+                }
                 genericOutboundMessage.setMessage(msg.getPayload().getMedia().getUrl());
                 webClient = WebClient.builder()
                         .baseUrl(url)
-                        .defaultHeader("Message-Type", "IMAGE")
-                        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .build();
-            } else if (msg.getPayload() != null && msg.getPayload().getMedia() != null && msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
-                genericOutboundMessage.setMessage(msg.getPayload().getMedia().getUrl());
-                webClient = WebClient.builder()
-                        .baseUrl(url)
-                        .defaultHeader("Message-Type", "AUDIO")
+                        .defaultHeader("Message-Type", msgType)
                         .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .build();
             } else {
@@ -91,7 +91,8 @@ public class GenericTransformerConsumer {
                                 log.info("Response : " + response.getData().getText());
                                 XMessagePayload payload = msg.getPayload();
 
-                                if (msg.getPayload() != null && msg.getPayload().getMedia() != null && msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+                                if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE) ||
+                                        msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
                                     payload.setMedia(null);
                                     payload.setText(response.getData().getText());
                                 } else {
