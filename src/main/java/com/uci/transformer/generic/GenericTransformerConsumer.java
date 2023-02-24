@@ -45,7 +45,10 @@ public class GenericTransformerConsumer {
 
     @Value("${doubtnut.baseurl}")
     public String url;
-
+    @Value("${doubtnut.welcome.msg}")
+    String welcomeMessage;
+    @Value("${doubtnut.welcome.video}")
+    String videoUrl;
 
     @KafkaListener(id = "${generic-transformer}", topics = "${generic-transformer}", properties = {"spring.json.value.default.type=java.lang.String"})
     public void onMessage(@Payload String stringMessage) {
@@ -56,61 +59,77 @@ public class GenericTransformerConsumer {
             XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
             GenericOutboundMessage genericOutboundMessage = new GenericOutboundMessage();
             WebClient webClient = null;
-            if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
-                    || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
-                String msgType = null;
-                if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
-                    msgType = "IMAGE";
-                } else if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
-                    msgType = "AUDIO";
+
+            if (msg.getTransformers().get(0).getMetaData().get("startingMessage").toString().equals(msg.getPayload().getText())) {
+                XMessagePayload payload = msg.getPayload();
+                MessageMedia messageMedia = null;
+                if (payload.getMedia() == null) {
+                    messageMedia = new MessageMedia();
+                } else {
+                    messageMedia = payload.getMedia();
                 }
-                genericOutboundMessage.setMessage(msg.getPayload().getMedia().getUrl());
-                webClient = WebClient.builder()
-                        .baseUrl(url)
-                        .defaultHeader("Message-Type", msgType)
-                        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .build();
+                payload.setText("");
+                messageMedia.setCategory(MediaCategory.VIDEO);
+                messageMedia.setUrl(videoUrl);
+                messageMedia.setText(welcomeMessage);
+                payload.setMedia(messageMedia);
+                msg.setPayload(payload);
+                kafkaProducer.send(processOutbound, msg.toXML());
+                return;
             } else {
-                genericOutboundMessage.setMessage(msg.getPayload().getText());
-                webClient = WebClient.builder()
-                        .baseUrl(url)
-                        .defaultHeader("Message-Type", "TEXT")
-                        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .build();
-            }
+                if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
+                        || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
+                    String msgType = null;
+                    if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
+                        msgType = "IMAGE";
+                    } else if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
+                        msgType = "AUDIO";
+                    }
+                    genericOutboundMessage.setMessage(msg.getPayload().getMedia().getUrl());
+                    webClient = WebClient.builder()
+                            .baseUrl(url)
+                            .defaultHeader("Message-Type", msgType)
+                            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .build();
+                } else {
+                    genericOutboundMessage.setMessage(msg.getPayload().getText());
+                    webClient = WebClient.builder()
+                            .baseUrl(url)
+                            .defaultHeader("Message-Type", "TEXT")
+                            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .build();
+                }
+                webClient.post()
+                        .uri("/v10/questions/ask-tara")
+                        .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
+                        .retrieve()
+                        .bodyToMono(GenericMessageResponse.class)
+                        .map(new Function<GenericMessageResponse, Boolean>() {
+                            @Override
+                            public Boolean apply(GenericMessageResponse response) {
+                                if (response != null && (response.getMeta() != null && response.getMeta().getCode() != null && response.getMeta().getCode().equals("200"))
+                                        && (response.getData() != null && response.getData().getAnswers() != null && response.getData().getAnswers().length > 0)) {
+                                    log.info("Response : " + response.getData().getAnswers());
+                                    XMessagePayload payload = msg.getPayload();
 
-            webClient.post()
-                    .uri("/v10/questions/ask-tara")
-                    .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
-                    .retrieve()
-                    .bodyToMono(GenericMessageResponse.class)
-                    .map(new Function<GenericMessageResponse, Boolean>() {
-                        @Override
-                        public Boolean apply(GenericMessageResponse response) {
-                            if (response != null && response.getMeta().getCode().equals("200") && !response.getData().getText().isEmpty()) {
-                                log.info("Response : " + response.getData().getText());
-                                XMessagePayload payload = msg.getPayload();
-
-                                if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE) ||
-                                        msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
-                                    payload.setMedia(null);
-                                    payload.setText(response.getData().getText());
+                                    for (String answer : response.getData().getAnswers()) {
+                                        payload.setMedia(null);
+                                        payload.setText(answer);
+                                        msg.setPayload(payload);
+                                        try {
+                                            kafkaProducer.send(processOutbound, msg.toXML());
+                                        } catch (JAXBException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    }
+                                    return true;
                                 } else {
-                                    payload.setText(response.getData().getText());
+                                    log.error("Doubtnut Api - Error Resposne : " + response.getMessage());
+                                    return false;
                                 }
-                                msg.setPayload(payload);
-                                try {
-                                    kafkaProducer.send(processOutbound, msg.toXML());
-                                } catch (JAXBException e) {
-                                    throw new RuntimeException(e);
-                                }
-                                return true;
-                            } else {
-                                log.error("Doubtnut Api - Error Resposne : " + response.getMessage());
-                                return false;
                             }
-                        }
-                    }).subscribe();
+                        }).subscribe();
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -121,4 +140,5 @@ public class GenericTransformerConsumer {
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
     }
+
 }

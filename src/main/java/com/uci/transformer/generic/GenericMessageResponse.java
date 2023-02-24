@@ -29,8 +29,8 @@ public class GenericMessageResponse {
     @Getter
     @Setter
     public static class Data {
-        @JsonAlias({"text"})
-        private String text;
+        @JsonAlias({"answers"})
+        private String[] answers;
     }
 
     private  Data data;
