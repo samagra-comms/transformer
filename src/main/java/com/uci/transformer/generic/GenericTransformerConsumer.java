@@ -20,35 +20,30 @@ import reactor.kafka.receiver.ReceiverRecord;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class GenericTransformerConsumer {
-    private final Flux<ReceiverRecord<String, String>> reactiveKafkaReceiver;
-
-    private static final String SMS_BROADCAST_IDENTIFIER = "Generic";
-    public static final String XML_PREFIX = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
-
     @Autowired
-    public SimpleProducer kafkaProducer;
+    private SimpleProducer kafkaProducer;
 
     @Value("${generic-transformer}")
-    public String genericTransformer;
+    private String genericTransformer;
 
     @Value("${processOutbound}")
-    public String processOutbound;
-
-    @Autowired
-    public BotService botService;
+    private String processOutbound;
 
     @Value("${doubtnut.baseurl}")
-    public String url;
+    private String url;
     @Value("${doubtnut.welcome.msg}")
-    String welcomeMessage;
+    private String welcomeMessage;
     @Value("${doubtnut.welcome.video}")
-    String videoUrl;
+    private String videoUrl;
+    @Value("${assesment.character.go_to_start}")
+    private String assesmentGotostart;
 
     @KafkaListener(id = "${generic-transformer}", topics = "${generic-transformer}", properties = {"spring.json.value.default.type=java.lang.String"})
     public void onMessage(@Payload String stringMessage) {
@@ -75,8 +70,23 @@ public class GenericTransformerConsumer {
                 payload.setMedia(messageMedia);
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
-                return;
-            } else {
+            } else if(msg.getPayload().getText().equals(assesmentGotostart)) {
+                XMessagePayload payload = msg.getPayload();
+                MessageMedia messageMedia = null;
+                if (payload.getMedia() == null) {
+                    messageMedia = new MessageMedia();
+                } else {
+                    messageMedia = payload.getMedia();
+                }
+                payload.setText("");
+                messageMedia.setCategory(MediaCategory.VIDEO);
+                messageMedia.setUrl(videoUrl);
+                messageMedia.setText(welcomeMessage);
+                payload.setMedia(messageMedia);
+                msg.setSessionId(UUID.randomUUID());
+                msg.setPayload(payload);
+                kafkaProducer.send(processOutbound, msg.toXML());
+            } else{
                 if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
                         || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
                     String msgType = null;
