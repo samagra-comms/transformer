@@ -119,9 +119,7 @@ public class GenericTransformerConsumer {
                             public Boolean apply(GenericMessageResponse response) {
                                 if (response != null && (response.getMeta() != null && response.getMeta().getCode() != null && response.getMeta().getCode().equals("200"))
                                         && (response.getData() != null && response.getData().getAnswers() != null && response.getData().getAnswers().length > 0)) {
-                                    log.info("Response : " + response.getData().getAnswers());
                                     XMessagePayload payload = msg.getPayload();
-
                                     for (String answer : response.getData().getAnswers()) {
                                         payload.setMedia(null);
                                         payload.setText(answer);

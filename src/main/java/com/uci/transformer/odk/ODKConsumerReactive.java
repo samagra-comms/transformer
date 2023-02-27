@@ -177,7 +177,14 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             logTimeTaken(startTime, 2);
                                             if (transformedMessage != null) {
                                                 try {
-                                                    kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
+                                                    if(transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
+                                                        && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
+                                                        && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
+                                                        kafkaProducer.send(genericTransformer, transformedMessage.toXML());
+
+                                                    } else {
+                                                        kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
+                                                    }
                                                     long endTime = System.nanoTime();
                                                     long duration = (endTime - startTime);
                                                     log.error("Total time spent in processing form: " + duration / 1000000);
@@ -363,9 +370,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 );
 
 
-
-                        /** This is for doubtnut hop bot hardcode
-                            TODO set transformer as we have done in orchestrator, owner id, owner orgid
+                        /**
+                         *  This is for doubtnut hop bot hardcode
                          **/
                         if (response[0].currentIndex.contains("eof__") && response[0].currentIndex.contains("doubtnut")) {
                             String nextBotID = mm.getNextBotID(response[0].currentIndex);
@@ -373,19 +379,55 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 @Override
                                 public Mono<XMessage> apply(JsonNode jsonNode) {
                                     JsonNode data = jsonNode.get("data");
+                                    ArrayList<Transformer> transformers = new ArrayList<Transformer>();
+                                    ArrayList transformerList = (ArrayList) data.findValues("transformers");
+
+                                    transformerList.forEach(transformerTmp -> {
+                                        JsonNode transformerNode = (JsonNode) transformerTmp;
+                                        int i = 0;
+                                        while (transformerNode.get(i) != null) {
+                                            JsonNode transformer = transformerNode.get(i);
+                                            log.info("transformer:" + transformer);
+
+                                            HashMap<String, String> metaData = new HashMap<String, String>();
+                                            if (data.findValue("ownerID").asText().equals("null")) {
+                                                metaData.put("botOwnerID", "");
+                                            } else {
+                                                metaData.put("botOwnerID", data.findValue("ownerID").asText());
+                                            }
+                                            if (data.findValue("ownerOrgID").asText().equals("null")) {
+                                                metaData.put("botOwnerOrgID", "");
+                                            } else {
+                                                metaData.put("botOwnerOrgID", data.findValue("ownerOrgID").asText());
+                                            }
+                                            metaData.put("startingMessage", data.findValue("startingMessage").asText());
+                                            metaData.put("type", "generic");
+
+                                            Transformer transf = new Transformer();
+                                            transf.setId(transformer.get("id").asText());
+                                            transf.setMetaData(metaData);
+                                            transformers.add(transf);
+                                            i++;
+                                        }
+                                    });
+                                    xMessage.setTransformers(transformers);
                                     XMessagePayload payload = xMessage.getPayload();
                                     payload.setText(data.path("startingMessage").asText());
                                     xMessage.setPayload(payload);
                                     xMessage.setApp(data.path("name").asText());
-                                    xMessage.setTransformers(null);
+                                    if (data.findValue("ownerID") != null && !data.findValue("ownerID").asText().equals("null")) {
+                                        xMessage.setOwnerId(data.findValue("ownerID").asText());
+                                    } else {
+                                        xMessage.setOwnerId("");
+                                    }
+                                    if (data.findValue("ownerOrgID") != null && !data.findValue("ownerOrgID").asText().equals("null")) {
+                                        xMessage.setOwnerOrgId(data.findValue("ownerOrgID").asText());
+                                    } else {
+                                        xMessage.setOwnerOrgId("");
+                                    }
                                     xMessage.setBotId(UUID.fromString(data.path("id").asText()));
                                     xMessage.setSessionId(UUID.randomUUID());
-                                    try {
-                                        kafkaProducer.send(genericTransformer, xMessage.toXML());
-                                    } catch (JAXBException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                    return null;
+                                    return Mono.just(xMessage);
                                 }
                             });
                         }
