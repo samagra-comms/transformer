@@ -247,7 +247,6 @@ public class ODKConsumerReactive extends TransformerProvider {
                         ObjectMapper mapper = new ObjectMapper();
                         JSONObject camp = null; //  is not being used in menumanager, only being added in constructor
                         // Remove camp from MenuManager construction
-                        User user2 = userService.findByPhone(xMessage.getTo().getUserID());
 
                         JSONObject user = userService.getUserByPhoneFromFederatedServers(
                                 getTransformerMetaDataValue(transformer, "botId"),
