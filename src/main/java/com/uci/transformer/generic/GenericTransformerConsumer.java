@@ -55,6 +55,7 @@ public class GenericTransformerConsumer {
             GenericOutboundMessage genericOutboundMessage = new GenericOutboundMessage();
             WebClient webClient = null;
 
+            // Checking Starting Message
             if (msg.getTransformers().get(0).getMetaData().get("startingMessage").toString().equals(msg.getPayload().getText())) {
                 XMessagePayload payload = msg.getPayload();
                 MessageMedia messageMedia = null;
@@ -70,7 +71,9 @@ public class GenericTransformerConsumer {
                 payload.setMedia(messageMedia);
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
-            } else if(msg.getPayload().getText().equals(assesmentGotostart)) {
+            }
+            // Exit Chat or Goto Start
+            else if (msg.getPayload().getText().equals(assesmentGotostart)) {
                 XMessagePayload payload = msg.getPayload();
                 MessageMedia messageMedia = null;
                 if (payload.getMedia() == null) {
@@ -86,7 +89,8 @@ public class GenericTransformerConsumer {
                 msg.setSessionId(UUID.randomUUID());
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
-            } else{
+            } else {
+
                 if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
                         || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
                     String msgType = null;
@@ -120,9 +124,24 @@ public class GenericTransformerConsumer {
                                 if (response != null && (response.getMeta() != null && response.getMeta().getCode() != null && response.getMeta().getCode().equals("200"))
                                         && (response.getData() != null && response.getData().getAnswers() != null && response.getData().getAnswers().length > 0)) {
                                     XMessagePayload payload = msg.getPayload();
-                                    for (String answer : response.getData().getAnswers()) {
-                                        payload.setMedia(null);
-                                        payload.setText(answer);
+                                    for (DoubtnutAnswers doubtnutAnswers : response.getData().getAnswers()) {
+
+                                        if (doubtnutAnswers.getImage() != null && !doubtnutAnswers.getImage().isEmpty()) {
+                                            MessageMedia messageMedia = new MessageMedia();
+                                            if (doubtnutAnswers.getImage().endsWith(".png") || doubtnutAnswers.getImage().endsWith(".jpg")
+                                                    || doubtnutAnswers.getImage().endsWith(".jpeg")) {
+                                                messageMedia.setCategory(MediaCategory.IMAGE);
+                                            } else {
+                                                log.error("Invalid image format found : " + doubtnutAnswers.getImage());
+                                            }
+                                            messageMedia.setUrl(doubtnutAnswers.getImage());
+                                            messageMedia.setText(doubtnutAnswers.getText());
+                                            payload.setMedia(messageMedia);
+
+                                        } else {
+                                            payload.setMedia(null);
+                                            payload.setText(doubtnutAnswers.getText());
+                                        }
                                         msg.setPayload(payload);
                                         try {
                                             kafkaProducer.send(processOutbound, msg.toXML());

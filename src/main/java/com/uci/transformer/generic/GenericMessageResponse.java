@@ -30,7 +30,7 @@ public class GenericMessageResponse {
     @Setter
     public static class Data {
         @JsonAlias({"answers"})
-        private String[] answers;
+        private DoubtnutAnswers[] answers;
     }
 
     private  Data data;
