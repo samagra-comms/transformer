@@ -12,6 +12,7 @@ import com.uci.adapter.cdn.FileCdnFactory;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
+import com.uci.transformer.odk.services.SurveyService;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
@@ -158,7 +159,10 @@ public class ODKConsumerReactive extends TransformerProvider {
     public FileCdnFactory fileCdnFactory;
 
     @Value("${generic-transformer}")
-    public String genericTransformer;
+    private String genericTransformer;
+
+    @Autowired
+    private SurveyService surveyService;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -177,9 +181,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                             logTimeTaken(startTime, 2);
                                             if (transformedMessage != null) {
                                                 try {
-                                                    if(transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
-                                                        && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
-                                                        && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
+                                                    if (transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
+                                                            && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
+                                                            && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
                                                         kafkaProducer.send(genericTransformer, transformedMessage.toXML());
 
                                                     } else {
@@ -247,18 +251,27 @@ public class ODKConsumerReactive extends TransformerProvider {
                         ObjectMapper mapper = new ObjectMapper();
                         JSONObject camp = null; //  is not being used in menumanager, only being added in constructor
                         // Remove camp from MenuManager construction
+                        String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
 
-                        JSONObject user = userService.getUserByPhoneFromFederatedServers(
-                                getTransformerMetaDataValue(transformer, "botId"),
-                                xMessage.getTo().getUserID()
-                        );
+
+                        String serviceClass = getTransformerMetaDataValue(transformer, "serviceClass");
+                        JSONObject user = null;
+                        if (serviceClass.equalsIgnoreCase(SurveyService.class.getSimpleName())) {
+                            user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, xMessage.getTo().getUserID());
+                        } else {
+                            user = userService.getUserByPhoneFromFederatedServers(
+                                    getTransformerMetaDataValue(transformer, "botId"),
+                                    xMessage.getTo().getUserID()
+                            );
+                        }
+
                         log.info("Federated User by phone : " + user);
 //                        try {
 //                            camp = new JSONObject(mapper.writeValueAsString(campaign));
 //                        } catch (JsonProcessingException e) {
 //                            e.printStackTrace();
 //                        }
-                        String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
+//                        String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
                         ArrayNode hiddenFields = null;
                         try {
                             hiddenFields = (ArrayNode) mapper.readTree(hiddenFieldsStr);
