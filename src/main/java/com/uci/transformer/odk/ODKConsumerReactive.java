@@ -252,11 +252,19 @@ public class ODKConsumerReactive extends TransformerProvider {
                         JSONObject camp = null; //  is not being used in menumanager, only being added in constructor
                         // Remove camp from MenuManager construction
                         String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
-                        JSONObject user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, xMessage.getTo().getUserID());
-//                        JSONObject user = userService.getUserByPhoneFromFederatedServers(
-//                                getTransformerMetaDataValue(transformer, "botId"),
-//                                xMessage.getTo().getUserID()
-//                        );
+
+
+                        String serviceClass = getTransformerMetaDataValue(transformer, "serviceClass");
+                        JSONObject user = null;
+                        if (serviceClass.equalsIgnoreCase(SurveyService.class.getSimpleName())) {
+                            user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, xMessage.getTo().getUserID());
+                        } else {
+                            user = userService.getUserByPhoneFromFederatedServers(
+                                    getTransformerMetaDataValue(transformer, "botId"),
+                                    xMessage.getTo().getUserID()
+                            );
+                        }
+
                         log.info("Federated User by phone : " + user);
 //                        try {
 //                            camp = new JSONObject(mapper.writeValueAsString(campaign));
