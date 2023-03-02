@@ -1,10 +1,12 @@
 package com.uci.transformer.generic;
 
-import com.uci.utils.BotService;
 import com.uci.utils.kafka.SimpleProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import messagerosa.core.model.*;
+import messagerosa.core.model.MediaCategory;
+import messagerosa.core.model.MessageMedia;
+import messagerosa.core.model.XMessage;
+import messagerosa.core.model.XMessagePayload;
 import messagerosa.xml.XMessageParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,9 +16,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.kafka.receiver.ReceiverRecord;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
@@ -90,10 +90,12 @@ public class GenericTransformerConsumer {
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
             } else {
-
+//                if(msg.getPayload().getText()!= null && !msg.getPayload().getText().startsWith("#conf")){
+//
+//                }
+                String msgType = null;
                 if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
                         || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
-                    String msgType = null;
                     if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
                         msgType = "IMAGE";
                     } else if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
@@ -106,13 +108,15 @@ public class GenericTransformerConsumer {
                             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .build();
                 } else {
+                    msgType = "TEXT";
                     genericOutboundMessage.setMessage(msg.getPayload().getText());
                     webClient = WebClient.builder()
                             .baseUrl(url)
-                            .defaultHeader("Message-Type", "TEXT")
+                            .defaultHeader("Message-Type", msgType)
                             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .build();
                 }
+                log.info(genericOutboundMessage.toString());
                 webClient.post()
                         .uri("/v10/questions/ask-tara")
                         .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
