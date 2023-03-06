@@ -1,5 +1,7 @@
 package com.uci.transformer.generic;
 
+import com.uci.dao.models.XMessageDAO;
+import com.uci.dao.repository.XMessageRepository;
 import com.uci.utils.BotService;
 import com.uci.utils.kafka.SimpleProducer;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,12 @@ import reactor.kafka.receiver.ReceiverRecord;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 @Component
@@ -105,57 +112,54 @@ public class GenericTransformerConsumer {
                             .defaultHeader("Message-Type", msgType)
                             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .build();
+                    sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
                 } else {
-                    genericOutboundMessage.setMessage(msg.getPayload().getText());
-                    webClient = WebClient.builder()
-                            .baseUrl(url)
-                            .defaultHeader("Message-Type", "TEXT")
-                            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                            .build();
-                }
-                webClient.post()
-                        .uri("/v10/questions/ask-tara")
-                        .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
-                        .retrieve()
-                        .bodyToMono(GenericMessageResponse.class)
-                        .map(new Function<GenericMessageResponse, Boolean>() {
+                    log.info("received answer : " + msg.getPayload().getText());
+                    if (msg.getPayload().getText().equalsIgnoreCase("yes")) {
+                        getLatestXMessage(msg.getTo().getUserID(), XMessage.MessageState.SENT).map(new Function<XMessageDAO, String>() {
                             @Override
-                            public Boolean apply(GenericMessageResponse response) {
-                                if (response != null && (response.getMeta() != null && response.getMeta().getCode() != null && response.getMeta().getCode().equals("200"))
-                                        && (response.getData() != null && response.getData().getAnswers() != null && response.getData().getAnswers().length > 0)) {
-                                    XMessagePayload payload = msg.getPayload();
-                                    for (DoubtnutAnswers doubtnutAnswers : response.getData().getAnswers()) {
-
-                                        if (doubtnutAnswers.getImage() != null && !doubtnutAnswers.getImage().isEmpty()) {
-                                            MessageMedia messageMedia = new MessageMedia();
-                                            if (doubtnutAnswers.getImage().endsWith(".png") || doubtnutAnswers.getImage().endsWith(".jpg")
-                                                    || doubtnutAnswers.getImage().endsWith(".jpeg")) {
-                                                messageMedia.setCategory(MediaCategory.IMAGE);
-                                            } else {
-                                                log.error("Invalid image format found : " + doubtnutAnswers.getImage());
-                                            }
-                                            messageMedia.setUrl(doubtnutAnswers.getImage());
-                                            messageMedia.setText(doubtnutAnswers.getText());
-                                            payload.setMedia(messageMedia);
-
-                                        } else {
-                                            payload.setMedia(null);
-                                            payload.setText(doubtnutAnswers.getText());
+                            public String apply(XMessageDAO xMessageDAO) {
+                                try {
+                                    XMessage msg = XMessageParser.parse(new ByteArrayInputStream(xMessageDAO.getXMessage().getBytes()));
+                                    String answer = "";
+                                    if (msg.getPayload() != null
+                                            && msg.getPayload().getText() != null
+                                            && !msg.getPayload().getText().isEmpty()
+                                            && msg.getPayload().getMedia() == null) {
+                                        WebClient webClient = WebClient.builder()
+                                                .baseUrl(url)
+                                                .defaultHeader("Message-Type", "TEXT")
+                                                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                                .build();
+                                        answer = msg.getPayload().getText();
+                                        if (answer.contains("\"")) {
+                                            answer = answer.substring(answer.indexOf("\"") + 1, answer.lastIndexOf("\""));
                                         }
+                                        log.info("trimed answer :" + answer);
+                                        XMessagePayload payload = msg.getPayload();
+                                        payload.setText(answer);
                                         msg.setPayload(payload);
-                                        try {
-                                            kafkaProducer.send(processOutbound, msg.toXML());
-                                        } catch (JAXBException e) {
-                                            throw new RuntimeException(e);
-                                        }
+                                        genericOutboundMessage.setMessage(msg.getPayload().getText());
+                                        sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
+                                    } else {
+                                        log.info("old message not received : " + msg.toXML());
                                     }
-                                    return true;
-                                } else {
-                                    log.error("Doubtnut Api - Error Resposne : " + response.getMessage());
-                                    return false;
+                                    return answer;
+                                } catch (JAXBException e) {
+                                    throw new RuntimeException(e);
                                 }
                             }
                         }).subscribe();
+                    } else {
+                        genericOutboundMessage.setMessage(msg.getPayload().getText());
+                        webClient = WebClient.builder()
+                                .baseUrl(url)
+                                .defaultHeader("Message-Type", "TEXT")
+                                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .build();
+                        sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
+                    }
+                }
             }
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -166,6 +170,83 @@ public class GenericTransformerConsumer {
         long endTime = System.nanoTime();
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
+    }
+
+    @Autowired
+    private XMessageRepository xMsgRepo;
+
+    private Mono<XMessageDAO> getLatestXMessage(String userID, XMessage.MessageState messageState) {
+        return xMsgRepo
+                .findAllByUserId(userID)
+                .doOnError(genericError(String.format("Unable to find previous Message for userID %s", userID)))
+                .collectList()
+                .map(xMessageDAOS -> {
+                    if (xMessageDAOS.size() > 0) {
+                        List<XMessageDAO> filteredList = new ArrayList<>();
+                        for (XMessageDAO xMessageDAO : xMessageDAOS) {
+                            if (xMessageDAO.getMessageState().equals(messageState.name())) {
+                                filteredList.add(xMessageDAO);
+                            }
+                        }
+                        if (filteredList.size() > 0) {
+                            filteredList.sort(Comparator.comparing(XMessageDAO::getTimestamp));
+                        }
+                        return xMessageDAOS.get(0);
+                    }
+                    return new XMessageDAO();
+                });
+    }
+
+    private Consumer<Throwable> genericError(String s) {
+        return c -> {
+            log.error(s + "::" + c.getMessage());
+        };
+    }
+
+    private void sendDoubtnutAPI(WebClient webClient, GenericOutboundMessage genericOutboundMessage, XMessage msg) {
+        webClient.post()
+                .uri("/v10/questions/ask-tara")
+                .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
+                .retrieve()
+                .bodyToMono(GenericMessageResponse.class)
+                .map(new Function<GenericMessageResponse, Boolean>() {
+                    @Override
+                    public Boolean apply(GenericMessageResponse response) {
+                        if (response != null && (response.getMeta() != null && response.getMeta().getCode() != null && response.getMeta().getCode().equals("200"))
+                                && (response.getData() != null && response.getData().getAnswers() != null && response.getData().getAnswers().length > 0)) {
+                            XMessagePayload payload = msg.getPayload();
+                            for (DoubtnutAnswers doubtnutAnswers : response.getData().getAnswers()) {
+
+                                if (doubtnutAnswers.getImage() != null && !doubtnutAnswers.getImage().isEmpty()) {
+                                    MessageMedia messageMedia = new MessageMedia();
+                                    if (doubtnutAnswers.getImage().endsWith(".png") || doubtnutAnswers.getImage().endsWith(".jpg")
+                                            || doubtnutAnswers.getImage().endsWith(".jpeg")) {
+                                        messageMedia.setCategory(MediaCategory.IMAGE);
+                                    } else {
+                                        log.error("Invalid image format found : " + doubtnutAnswers.getImage());
+                                    }
+                                    messageMedia.setUrl(doubtnutAnswers.getImage());
+                                    messageMedia.setText(doubtnutAnswers.getText());
+                                    payload.setMedia(messageMedia);
+
+                                } else {
+                                    payload.setMedia(null);
+                                    payload.setText(doubtnutAnswers.getText());
+                                }
+                                msg.setPayload(payload);
+                                try {
+                                    kafkaProducer.send(processOutbound, msg.toXML());
+                                } catch (JAXBException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+                            return true;
+                        } else {
+                            log.error("Doubtnut Api - Error Resposne : " + response.getMessage());
+                            return false;
+                        }
+                    }
+                }).subscribe();
     }
 
 }
