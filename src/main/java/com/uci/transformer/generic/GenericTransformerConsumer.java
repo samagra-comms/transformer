@@ -71,11 +71,13 @@ public class GenericTransformerConsumer {
                 } else {
                     messageMedia = payload.getMedia();
                 }
-                payload.setText("");
-                messageMedia.setCategory(MediaCategory.VIDEO);
-                messageMedia.setUrl(videoUrl);
-                messageMedia.setText(welcomeMessage);
-                payload.setMedia(messageMedia);
+                payload.setText(welcomeMessage);
+                if (videoUrl != null && !videoUrl.isEmpty()) {
+                    messageMedia.setCategory(MediaCategory.VIDEO);
+                    messageMedia.setUrl(videoUrl);
+                    messageMedia.setText(welcomeMessage);
+                    payload.setMedia(messageMedia);
+                }
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
             }
