@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import messagerosa.core.model.ButtonChoice;
+
+import java.util.ArrayList;
 
 @Getter
 @Setter
@@ -15,5 +18,8 @@ public class DoubtnutAnswers {
     private String text;
     @JsonAlias({"image"})
     private String image;
+
+    @JsonAlias({"choices"})
+    private ArrayList<ButtonChoice> buttonChoices;
 
 }

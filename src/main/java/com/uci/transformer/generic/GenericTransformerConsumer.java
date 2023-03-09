@@ -10,6 +10,10 @@ import messagerosa.core.model.*;
 import messagerosa.xml.XMessageParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.cassandra.core.query.CassandraPageRequest;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -52,6 +56,9 @@ public class GenericTransformerConsumer {
     @Value("${assesment.character.go_to_start}")
     private String assesmentGotostart;
 
+    @Value(("${doubtnut.apikey}"))
+    private String doubtnutApikey;
+
     @KafkaListener(id = "${generic-transformer}", topics = "${generic-transformer}", properties = {"spring.json.value.default.type=java.lang.String"})
     public void onMessage(@Payload String stringMessage) {
         try {
@@ -60,7 +67,6 @@ public class GenericTransformerConsumer {
             logTimeTaken(startTime, 0);
             XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
             GenericOutboundMessage genericOutboundMessage = new GenericOutboundMessage();
-            WebClient webClient = null;
 
             // Checking Starting Message
             if (msg.getTransformers().get(0).getMetaData().get("startingMessage").toString().equals(msg.getPayload().getText())) {
@@ -109,12 +115,7 @@ public class GenericTransformerConsumer {
                         msgType = "AUDIO";
                     }
                     genericOutboundMessage.setMessage(msg.getPayload().getMedia().getUrl());
-                    webClient = WebClient.builder()
-                            .baseUrl(url)
-                            .defaultHeader("Message-Type", msgType)
-                            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                            .build();
-                    sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
+                    sendDoubtnutAPI(genericOutboundMessage, msg, msgType);
                 } else {
                     log.info("received answer : " + msg.getPayload().getText());
                     if (msg.getPayload().getText().equalsIgnoreCase("yes")) {
@@ -128,11 +129,7 @@ public class GenericTransformerConsumer {
                                             && msg.getPayload().getText() != null
                                             && !msg.getPayload().getText().isEmpty()
                                             && msg.getPayload().getMedia() == null) {
-                                        WebClient webClient = WebClient.builder()
-                                                .baseUrl(url)
-                                                .defaultHeader("Message-Type", "TEXT")
-                                                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                                .build();
+                                        String msgType = "TEXT";
                                         answer = msg.getPayload().getText();
                                         if (answer.contains("\"")) {
                                             answer = answer.substring(answer.indexOf("\"") + 1, answer.lastIndexOf("\""));
@@ -142,7 +139,7 @@ public class GenericTransformerConsumer {
                                         payload.setText(answer);
                                         msg.setPayload(payload);
                                         genericOutboundMessage.setMessage(msg.getPayload().getText());
-                                        sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
+                                        sendDoubtnutAPI(genericOutboundMessage, msg, msgType);
                                     } else {
                                         log.info("old message not received : " + msg.toXML());
                                     }
@@ -153,13 +150,9 @@ public class GenericTransformerConsumer {
                             }
                         }).subscribe();
                     } else {
+                        String msgType = "TEXT";
                         genericOutboundMessage.setMessage(msg.getPayload().getText());
-                        webClient = WebClient.builder()
-                                .baseUrl(url)
-                                .defaultHeader("Message-Type", "TEXT")
-                                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                .build();
-                        sendDoubtnutAPI(webClient, genericOutboundMessage, msg);
+                        sendDoubtnutAPI(genericOutboundMessage, msg, msgType);
                     }
                 }
             }
@@ -178,6 +171,16 @@ public class GenericTransformerConsumer {
     private XMessageRepository xMsgRepo;
 
     private Mono<XMessageDAO> getLatestXMessage(String userID, XMessage.MessageState messageState) {
+        Pageable paging = (Pageable) CassandraPageRequest.of(
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "timestamp")),
+                null
+        );
+//        return xMsgRepo.findAllByUserIdAndMessageStateAndFromId(paging, userID, messageState.name(), "admin").map(xMessageDAOS -> {
+//            if(xMessageDAOS != null && xMessageDAOS.getContent() != null && xMessageDAOS.getContent().size() > 0){
+//                return xMessageDAOS.getContent().get(0);
+//            }
+//            return new XMessageDAO();
+//        });
         return xMsgRepo
                 .findAllByUserId(userID)
                 .doOnError(genericError(String.format("Unable to find previous Message for userID %s", userID)))
@@ -205,8 +208,15 @@ public class GenericTransformerConsumer {
         };
     }
 
-    private void sendDoubtnutAPI(WebClient webClient, GenericOutboundMessage genericOutboundMessage, XMessage msg) {
-        webClient.post()
+    private void sendDoubtnutAPI(GenericOutboundMessage genericOutboundMessage, XMessage msg, String msgType) {
+
+        WebClient.builder()
+                .baseUrl(url)
+                .defaultHeader("Message-Type", msgType)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader("Api-Key", doubtnutApikey)
+                .build()
+                .post()
                 .uri("/v10/questions/ask-tara")
                 .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
                 .retrieve()
@@ -229,11 +239,19 @@ public class GenericTransformerConsumer {
                                     }
                                     messageMedia.setUrl(doubtnutAnswers.getImage());
                                     messageMedia.setText(doubtnutAnswers.getText());
+                                    payload.setText(doubtnutAnswers.getText());
                                     payload.setMedia(messageMedia);
-
+                                    payload.setStylingTag(null);
+                                    payload.setButtonChoices(null);
                                 } else {
                                     payload.setMedia(null);
                                     payload.setText(doubtnutAnswers.getText());
+                                    payload.setStylingTag(null);
+                                    payload.setButtonChoices(null);
+                                }
+                                if (doubtnutAnswers.getButtonChoices() != null && doubtnutAnswers.getButtonChoices().size() > 0) {
+                                    payload.setStylingTag(StylingTag.QUICKREPLYBTN);
+                                    payload.setButtonChoices(doubtnutAnswers.getButtonChoices());
                                 }
                                 msg.setPayload(payload);
                                 try {
