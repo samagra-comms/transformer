@@ -2,14 +2,10 @@ package com.uci.transformer.generic;
 
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
-import com.uci.utils.BotService;
 import com.uci.utils.kafka.SimpleProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import messagerosa.core.model.MediaCategory;
-import messagerosa.core.model.MessageMedia;
-import messagerosa.core.model.XMessage;
-import messagerosa.core.model.XMessagePayload;
+import messagerosa.core.model.*;
 import messagerosa.xml.XMessageParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +23,6 @@ import reactor.core.publisher.Mono;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -96,12 +91,10 @@ public class GenericTransformerConsumer {
                 msg.setPayload(payload);
                 kafkaProducer.send(processOutbound, msg.toXML());
             } else {
-//                if(msg.getPayload().getText()!= null && !msg.getPayload().getText().startsWith("#conf")){
-//
-//                }
-                String msgType = null;
+
                 if (msg.getPayload() != null && msg.getPayload().getMedia() != null && (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)
                         || msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO))) {
+                    String msgType = null;
                     if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.IMAGE)) {
                         msgType = "IMAGE";
                     } else if (msg.getPayload().getMedia().getCategory().equals(MediaCategory.AUDIO)) {
