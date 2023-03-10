@@ -150,11 +150,12 @@ public class GenericTransformerConsumer {
                                             && msg.getPayload().getText() != null
                                             && !msg.getPayload().getText().isEmpty()
                                             && msg.getPayload().getMedia() == null) {
-                                        String msgType = "TEXT";
+
                                         if (msg.getPayload().getButtonChoices() != null) {
                                             msg.getPayload().setButtonChoices(null);
                                             msg.getPayload().setStylingTag(null);
                                             XMessagePayload payload = msg.getPayload();
+                                            msg.setMessageState(XMessage.MessageState.REPLIED);
                                             sendWelcomeMessage(payload, msg);
                                         } else {
                                             log.info("invalid input!");
