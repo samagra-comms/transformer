@@ -1,10 +1,7 @@
 package com.uci.transformer.generic;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import messagerosa.core.model.ButtonChoice;
 
 import java.util.ArrayList;
@@ -13,6 +10,7 @@ import java.util.ArrayList;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class DoubtnutAnswers {
     @JsonAlias({"text"})
     private String text;
