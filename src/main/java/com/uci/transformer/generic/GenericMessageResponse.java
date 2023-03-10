@@ -1,19 +1,18 @@
 package com.uci.transformer.generic;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString
 public class GenericMessageResponse {
 
     @Getter
     @Setter
+    @ToString
     public static class Meta {
 
         @JsonAlias({"code"})
@@ -28,6 +27,7 @@ public class GenericMessageResponse {
 
     @Getter
     @Setter
+    @ToString
     public static class Data {
         @JsonAlias({"answers"})
         private DoubtnutAnswers[] answers;
