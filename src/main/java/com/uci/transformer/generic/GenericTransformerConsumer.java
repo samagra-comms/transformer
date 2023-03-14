@@ -231,7 +231,7 @@ public class GenericTransformerConsumer {
                 .defaultHeader("Api-Key", doubtnutApikey)
                 .build()
                 .post()
-                .uri("/v10/questions/ask-tara")
+                .uri("/")
                 .body(Mono.just(genericOutboundMessage), GenericOutboundMessage.class)
                 .retrieve()
                 .bodyToMono(GenericMessageResponse.class)
