@@ -124,6 +124,7 @@ public class GenericTransformerConsumer {
                                         XMessagePayload payload = msg.getPayload();
                                         payload.setText(answer);
                                         msg.setPayload(payload);
+                                        msg.setMessageState(XMessage.MessageState.REPLIED);
                                         genericOutboundMessage.setMessage(msg.getPayload().getText());
                                         sendDoubtnutAPI(genericOutboundMessage, msg, msgType);
                                     } else {
