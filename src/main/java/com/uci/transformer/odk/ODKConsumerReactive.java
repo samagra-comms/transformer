@@ -1,18 +1,14 @@
 package com.uci.transformer.odk;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.collect.Maps;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
-import com.uci.adapter.cdn.FileCdnFactory;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
 import com.uci.transformer.TransformerProvider;
-import com.uci.transformer.odk.services.SurveyService;
+import com.uci.utils.BotService;
+import com.uci.utils.bot.util.BotUtil;
+import com.uci.utils.cdn.FileCdnFactory;
 import com.uci.utils.service.UserService;
 import com.uci.transformer.odk.entity.Assessment;
 import com.uci.transformer.odk.entity.GupshupMessageEntity;
@@ -24,20 +20,15 @@ import com.uci.transformer.odk.repository.AssessmentRepository;
 import com.uci.transformer.odk.repository.MessageRepository;
 import com.uci.transformer.odk.repository.QuestionRepository;
 import com.uci.transformer.odk.repository.StateRepository;
-import com.uci.transformer.odk.utilities.FormUpdation;
 import com.uci.transformer.odk.utilities.FormInstanceUpdation;
 import com.uci.transformer.telemetry.AssessmentTelemetryBuilder;
-import com.uci.utils.CampaignService;
 import com.uci.utils.cache.service.RedisCacheService;
 import com.uci.utils.kafka.SimpleProducer;
 import com.uci.utils.telemetry.service.PosthogService;
 
-import io.fusionauth.domain.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import messagerosa.core.model.ButtonChoice;
 import messagerosa.core.model.LocationParams;
-import messagerosa.core.model.SenderReceiverInfo;
 import messagerosa.core.model.Transformer;
 import messagerosa.core.model.XMessage;
 import messagerosa.core.model.XMessage.MessageState;
@@ -46,19 +37,14 @@ import messagerosa.xml.XMessageParser;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
-import org.springframework.util.FileCopyUtils;
 import org.springframework.web.client.RestTemplate;
-import reactor.blockhound.BlockHound;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
@@ -66,11 +52,6 @@ import reactor.util.function.Tuple2;
 
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -78,9 +59,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import static messagerosa.core.model.XMessage.MessageState.NOT_SENT;
-import static messagerosa.core.model.XMessage.MessageType.HSM;
 
 @Component
 @RequiredArgsConstructor
@@ -121,7 +99,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     private MessageRepository msgRepo;
-
+    
     @Autowired
     XMessageRepository xMsgRepo;
 
@@ -134,24 +112,24 @@ public class ODKConsumerReactive extends TransformerProvider {
     private RestTemplate restTemplate;
 
     @Autowired
-    CampaignService campaignService;
-
+    BotService botService;
+    
     @Autowired
     UserService userService;
 
     @Value("${producer.id}")
     private String producerID;
-
+    
     @Value("${assesment.character.go_to_start}")
     public String assesGoToStartChar;
-
+    
     public MenuManager menuManager;
-
+    
     public Boolean isStartingMessage;
-
+    
     @Autowired
     public PosthogService posthogService;
-
+    
     @Autowired
     public RedisCacheService redisCacheService;
 
@@ -201,8 +179,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                         } catch (JAXBException e) {
                             e.printStackTrace();
                         } catch (NullPointerException e) {
-                            log.error("An error occured : " + e.getMessage() + " at line no : " + e.getStackTrace()[0].getLineNumber()
-                                    + " in class : " + e.getStackTrace()[0].getClassName());
+                            log.error("An error occured : "+e.getMessage() + " at line no : "+ e.getStackTrace()[0].getLineNumber()
+                                    +" in class : "+e.getStackTrace()[0].getClassName());
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -217,14 +195,14 @@ public class ODKConsumerReactive extends TransformerProvider {
                 }).subscribe();
 
     }
-
+    
     @Override
     public Mono<XMessage> transform(XMessage xMessage) throws Exception {
-        XMessage[] finalXMsg = new XMessage[1];
+    	XMessage[] finalXMsg = new XMessage[1];
         ArrayList<Transformer> transformers = xMessage.getTransformers();
         Transformer transformer = transformers.get(0);
 
-        log.info("1 To User ID:" + xMessage.getTo().getUserID());
+        log.info("1 To User ID:"+xMessage.getTo().getUserID());
         String formID = ODKConsumerReactive.this.getTransformerMetaDataValue(transformer, "formID");
 
         if (formID.equals("")) {
@@ -232,10 +210,10 @@ public class ODKConsumerReactive extends TransformerProvider {
             return null;
         }
 
-        log.info("current form ID:" + formID);
+        log.info("current form ID:"+formID);
         String formPath = getFormPath(formID);
-        log.info("current form path:" + formPath);
-        if (formPath == null) {
+        log.info("current form path:"+formPath);
+        if(formPath == null ){
             return null;
         }
         isStartingMessage = xMessage.getPayload().getText() == null ? false : xMessage.getPayload().getText().equals(getTransformerMetaDataValue(transformer, "startingMessage"));
@@ -277,10 +255,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                         Boolean prefilled;
                         String answer;
                         if (previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
-//                                            if (!lastFormID.equals(formID) || previousMeta.instanceXMlPrevious == null || previousMeta.currentAnswer.equals(assesGoToStartChar) || isStartingMessage) {
                             /* If bot restarted - create new session id */
-                            if (previousMeta.currentAnswer.equals(assesGoToStartChar)) {
-                                xMessage.setSessionId(UUID.randomUUID());
+                            if(previousMeta.currentAnswer.equals(assesGoToStartChar)) {
+                                xMessage.setSessionId(BotUtil.newConversationSessionId());
                             }
                             previousMeta.currentAnswer = assesGoToStartChar;
                             ServiceResponse serviceResponse = new MenuManager(null,
@@ -294,49 +271,49 @@ public class ODKConsumerReactive extends TransformerProvider {
                             prefilled = false;
                             answer = null;
                             log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
-                                    + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID);
+                                    +instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID);
                             mm = new MenuManager(null, null, instanceXMlPrevious,
                                     formPath, formID, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload(), fileCdnFactory.getFileCdnProvider());
                             response[0] = mm.start();
                         } else {
                             FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
-                            if (previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")) {
+                            if(previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")){
                                 ss.parse(previousMeta.instanceXMlPrevious);
                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
 
                                 JSONObject vacancyDetails = null;
-                                for (int j = 0; j < user.getJSONArray("matched").length(); j++) {
+                                for(int j=0; j<user.getJSONArray("matched").length(); j++){
                                     String vacancyID = String.valueOf(user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail").getInt("id"));
-                                    if (previousMeta.currentAnswer.equals(vacancyID)) {
+                                    if(previousMeta.currentAnswer.equals(vacancyID)){
                                         vacancyDetails = user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail");
                                     }
                                 }
                                 ss.updateHiddenFields(hiddenFields, user);
                                 int idToBeDeleted = -1;
-                                for (int i = 0; i < hiddenFields.size(); i++) {
+                                for (int i=0; i< hiddenFields.size(); i++){
                                     JsonNode object = hiddenFields.get(i);
                                     String userField = object.findValue("name").asText();
-                                    if (userField.equals("candidate_id")) {
+                                    if(userField.equals("candidate_id")){
                                         idToBeDeleted = i;
                                     }
                                 }
-                                if (idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
+                                if(idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
                                 instanceXMlPrevious = instanceXMlPrevious + ss.updateHiddenFields(hiddenFields, (JSONObject) vacancyDetails).getXML();
                                 prefilled = false;
                                 answer = previousMeta.currentAnswer;
-                                log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
-                                        + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
-                                        + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
+                                log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
+                                        +instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
+                                        +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
                                         prefilled, questionRepo, user, true, redisCacheService, xMessage, fileCdnFactory.getFileCdnProvider());
-                            } else {
+                            }else{
                                 prefilled = false;
                                 answer = previousMeta.currentAnswer;
                                 instanceXMlPrevious = previousMeta.instanceXMlPrevious;
-                                log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
-                                        + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
-                                        + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
+                                log.info("Condition 1 - xpath: "+previousMeta.previousPath+", answer: "+answer+", instanceXMlPrevious: "
+                                        +instanceXMlPrevious+", formPath: "+formPath+", formID: "+formID+", prefilled: "+prefilled
+                                        +", questionRepo: "+questionRepo+", user: "+user+", shouldUpdateFormXML: true, campaign: "+camp);
                                 mm = new MenuManager(previousMeta.previousPath, answer,
                                         instanceXMlPrevious, formPath, formID,
                                         prefilled, questionRepo, user, true, redisCacheService, xMessage, fileCdnFactory.getFileCdnProvider());
@@ -352,7 +329,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                         /* Previous Question Data */
                         Question prevQuestion = null;
-                        if (!isStartingMessage) {
+                        if(!isStartingMessage) {
                             prevQuestion = menuManager.getQuestionFromXPath(previousMeta.previousPath);
                         }
 
@@ -440,8 +417,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                             String nextBotID = mm.getNextBotID(response[0].currentIndex);
 
                             return Mono.zip(
-                                    campaignService.getBotNameByBotID(nextBotID),
-                                    campaignService.getFirstFormByBotID(nextBotID)
+                                    botService.getBotNameByBotID(nextBotID),
+                                    botService.getFirstFormByBotID(nextBotID)
                             ).map(new Function<Tuple2<String, String>, Mono<XMessage>>() {
                                 @Override
                                 public Mono<XMessage> apply(Tuple2<String, String> objects) {
@@ -486,16 +463,15 @@ public class ODKConsumerReactive extends TransformerProvider {
                     }
                 });
     }
-
+    
     /**
      * Check if form has ended by xpath
-     *
      * @param xPath
      * @return
      */
     private Boolean isEndOfForm(String xPath) {
-        log.info("xPath for isEndOfForm check: " + xPath);
-        return xPath.contains("endOfForm") || xPath.contains("eof");
+    	log.info("xPath for isEndOfForm check: "+xPath);
+    	return xPath.contains("endOfForm") || xPath.contains("eof");
     }
 
     private Mono<FormManagerParams> getPreviousMetadata(XMessage message, String formID) {
@@ -517,12 +493,12 @@ public class ODKConsumerReactive extends TransformerProvider {
 
                             // Handle image responses to a question
                             if (message.getPayload() != null) {
-                                if (message.getPayload().getMedia() != null) {
-                                    formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
-                                } else if (message.getPayload().getLocation() != null) {
-                                    formManagerParams.setCurrentAnswer(getLocationContentText(message.getPayload().getLocation()));
-                                } else {
-                                    formManagerParams.setCurrentAnswer(message.getPayload().getText());
+                            	if(message.getPayload().getMedia() != null) {
+                                	formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
+                                } else if(message.getPayload().getLocation() != null) {
+                                	formManagerParams.setCurrentAnswer(getLocationContentText(message.getPayload().getLocation()));
+                                } else  {
+                                	formManagerParams.setCurrentAnswer(message.getPayload().getText());
                                 }
                             } else {
                                 formManagerParams.setCurrentAnswer("");
@@ -543,25 +519,24 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     /**
      * Get location content text
-     *
      * @param location
      * @return
      */
     private String getLocationContentText(LocationParams location) {
-        String text = "";
-        text = location.getLatitude() + " " + location.getLongitude();
-        if (location.getAddress() != null && !location.getAddress().isEmpty()) {
-            text += " " + location.getAddress();
-        }
-        if (location.getName() != null && !location.getName().isEmpty()) {
-            text += " " + location.getName();
-        }
-        if (location.getUrl() != null && !location.getUrl().isEmpty()) {
-            text += " " + location.getUrl();
-        }
-        return text.trim();
+    	String text = "";
+    	text = location.getLatitude()+" "+location.getLongitude();
+    	if(location.getAddress() != null && !location.getAddress().isEmpty()) {
+    		text += " "+location.getAddress();
+    	}
+    	if(location.getName() != null && !location.getName().isEmpty()) {
+    		text += " "+location.getName();
+    	}
+    	if(location.getUrl() != null && !location.getUrl().isEmpty()) {
+    		text += " "+location.getUrl();
+    	}
+    	return text.trim();
     }
-
+    
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
@@ -572,8 +547,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                     @Override
                     public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
                         if (existingQuestionStatus.getLeft()) {
-                            log.info("Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
-                            saveAssessmentData(
+                        	log.info("Found Question id: "+existingQuestionStatus.getRight().get(0).getId()+", xPath: "+existingQuestionStatus.getRight().get(0).getXPath());
+                        	saveAssessmentData(
                                     existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
                                 @Override
                                 public void accept(Assessment assessment) {
@@ -581,17 +556,17 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 }
                             });
                         } else {
-                            Question saveQuestion;
-                            if (prevQuestion == null) {
-                                saveQuestion = question;
-                            } else {
-                                saveQuestion = prevQuestion;
-                            }
+                        	Question saveQuestion;
+                        	if(prevQuestion == null) {
+                        		saveQuestion = question;
+                        	} else {
+                        		saveQuestion = prevQuestion;
+                        	}
                             saveQuestion(saveQuestion).subscribe(new Consumer<Question>() {
                                 @Override
                                 public void accept(Question question) {
-                                    log.info("Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
-                                    saveAssessmentData(
+                                	log.info("Question Saved Successfully, id: "+question.getId()+", xPath: "+question.getXPath());
+                                	saveAssessmentData(
                                             existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
                                         @Override
                                         public void accept(Assessment assessment) {
@@ -606,7 +581,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     private Mono<Pair<Boolean, List<Question>>> getPreviousQuestions(String previousPath, String formID, String formVersion) {
-        return questionRepo
+    	return questionRepo
                 .findQuestionByXPathAndFormIDAndFormVersion(previousPath, formID, formVersion)
                 .collectList()
                 .flatMap(new Function<List<Question>, Mono<Pair<Boolean, List<Question>>>>() {
@@ -630,9 +605,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 Transformer transformer, XMessage xMessage, Question question,
                                                 String currentXPath, Boolean validResponse) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
-
+        
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
-        log.info("User uuid:" + userID);
+        log.info("User uuid:"+userID);
 
         Assessment assessment = Assessment.builder()
                 .question(question)
@@ -642,23 +617,23 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .userID(userID)
                 .build();
         try {
-            if (question != null) {
-                log.info("In saveAssessmentData, question id: " + question.getId() + ", question xpath: " + question.getXPath());
-            } else {
-                log.info("In saveAssessmentData, Question empty: " + question);
+        	if(question != null) {
+        		log.info("In saveAssessmentData, question id: "+question.getId()+", question xpath: "+question.getXPath());
+        	}else {
+            	log.info("In saveAssessmentData, Question empty: "+question);
             }
-
-            if (question != null && !isStartingMessage) {
-
-                XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
+        	
+        	if(question != null && !isStartingMessage) {
+        		
+        		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
 
                 sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath, validResponse);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        log.info("question xpath:" + question.getXPath() + ",answer: " + assessment.getAnswer());
-
+        log.info("question xpath:"+question.getXPath()+",answer: "+assessment.getAnswer());
+        
         return assessmentRepo.save(assessment)
                 .doOnError(new Consumer<Throwable>() {
                     @Override
@@ -669,82 +644,81 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .doOnNext(new Consumer<Assessment>() {
                     @Override
                     public void accept(Assessment assessment) {
-                        log.info("Assessment Saved by id: " + assessment.getId());
+                        log.info("Assessment Saved by id: "+assessment.getId());
                     }
                 });
     }
 
     private void sendEvents(XMessage xMessage, XMessagePayload questionPayload, Assessment assessment, Transformer transformer,
                             String currentXPath, Boolean validResponse) throws Exception {
-        log.info("find xmessage by app: " + xMessage.getApp() + ", userId: " + xMessage.getTo().getUserID() + ", fromId: admin, status: " + MessageState.SENT.name());
+        log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
 
         /* Get Previous question XMessage */
         getLastSentXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
                 .subscribe(new Consumer<XMessageDAO>() {
-                    @Override
-                    public void accept(XMessageDAO xMsgDao) {
-                        log.info("found xMsgDao");
+                               @Override
+                               public void accept(XMessageDAO xMsgDao) {
+                                   log.info("found xMsgDao");
 
-                        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                        LocalDateTime repliedTimestamp = null;
-                        /* Convert replied timestamp to local date time format */
-                        if (xMessage.getTimestamp() != null) {
-                            try {
-                                LocalDateTime repliedAt = new Timestamp(new Date(xMessage.getTimestamp()).getTime()).toLocalDateTime();
-                                String repliedAtTime = fmt.format(repliedAt).toString();
-                                repliedTimestamp = LocalDateTime.parse(repliedAtTime, fmt);
-                            } catch (Exception ex) {
-                                log.error("Exception when conversatin replied timestamp: " + ex.getMessage());
-                            }
-                        }
-                        /* If replied timestamp is null, use current date time as replied timestamp */
-                        if (repliedTimestamp == null) {
-                            LocalDateTime localNow = LocalDateTime.now();
-                            String current = fmt.format(localNow).toString();
-                            repliedTimestamp = LocalDateTime.parse(current, fmt);
-                        }
+                                   DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+                                   LocalDateTime repliedTimestamp=null;
+                                   /* Convert replied timestamp to local date time format */
+                                   if(xMessage.getTimestamp() != null) {
+                                       try{
+                                           LocalDateTime repliedAt = new Timestamp(new Date(xMessage.getTimestamp()).getTime()).toLocalDateTime();
+                                           String repliedAtTime = fmt.format(repliedAt).toString();
+                                           repliedTimestamp = LocalDateTime.parse(repliedAtTime, fmt);
+                                       } catch (Exception ex) {
+                                           log.error("Exception when conversatin replied timestamp: "+ex.getMessage());
+                                       }
+                                   }
+                                   /* If replied timestamp is null, use current date time as replied timestamp */
+                                   if (repliedTimestamp == null) {
+                                       LocalDateTime localNow = LocalDateTime.now();
+                                       String current = fmt.format(localNow).toString();
+                                       repliedTimestamp = LocalDateTime.parse(current, fmt);
+                                   }
 
-                        /* Last sent message timestamp  */
-                        LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
-                        long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
-                        long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
-                        String telemetryEvent = new AssessmentTelemetryBuilder()
-                                .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                                        xMessage.getChannel(),
-                                        xMessage.getProvider(),
-                                        producerID,
-                                        getTransformerMetaDataValue(transformer, "botOwnerID"),
-                                        assessment.getQuestion(),
-                                        assessment,
-                                        questionPayload,
-                                        diff_secs,
-                                        xMessage.getTo().getEncryptedDeviceID(),
-                                        xMessage.getMessageId().getChannelMessageId(),
-                                        isEndOfForm(currentXPath),
-                                        xMessage.getSessionId(),
-                                        validResponse);
-                        log.info("Telemetry Event: " + telemetryEvent);
-                        if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
-                            try {
-                                sendExhaustEvent(telemetryEvent);
-                            } catch (Exception e) {
-                                log.error("Exception in exhaust event: " + e.getMessage());
-                            }
-                        }
-                        if (posthogEventEnabled.equalsIgnoreCase("true")) {
-                            try {
-                                sendPosthogEvent(xMessage, telemetryEvent, questionPayload, diff_milis);
-                            } catch (Exception e) {
-                                log.error("Exception in posthog event: " + e.getMessage());
-                            }
-                        }
-                    }
+                                   /* Last sent message timestamp  */
+                                   LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
+                                   long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
+                                   long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
+                                   String telemetryEvent = new AssessmentTelemetryBuilder()
+                                           .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                                   xMessage.getChannel(),
+                                                   xMessage.getProvider(),
+                                                   producerID,
+                                                   getTransformerMetaDataValue(transformer, "botOwnerID"),
+                                                   assessment.getQuestion(),
+                                                   assessment,
+                                                   questionPayload,
+                                                   diff_secs,
+                                                   xMessage.getTo().getEncryptedDeviceID(),
+                                                   xMessage.getMessageId().getChannelMessageId(),
+                                                   isEndOfForm(currentXPath),
+                                                   xMessage.getSessionId(),
+                                                   validResponse);
+                                   log.info("Telemetry Event: " +telemetryEvent);
+                                   if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
+                                       try {
+                                           sendExhaustEvent(telemetryEvent);
+                                       } catch (Exception e) {
+                                           log.error("Exception in exhaust event: "+e.getMessage());
+                                       }
+                                   }
+                                   if (posthogEventEnabled.equalsIgnoreCase("true")) {
+                                       try {
+                                           sendPosthogEvent(xMessage, telemetryEvent, questionPayload, diff_milis);
+                                       } catch (Exception e) {
+                                           log.error("Exception in posthog event: "+e.getMessage());
+                                       }
+                                   }
+                               }
                 });
     }
 
     /**
      * Send the telemetry event for exhaust
-     *
      * @param telemetryEvent
      * @throws Exception
      */
@@ -754,7 +728,6 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     /**
      * Send the telemetry & dropoff event to posthog
-     *
      * @param xMessage
      * @param telemetryEvent
      * @param questionPayload
@@ -790,31 +763,30 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     /**
      * Get Last XMessage sent to user from admin
-     *
      * @param appName
      * @param userID
      * @return
      */
     private Flux<XMessageDAO> getLastSentXMessage(String appName, String userID) {
-        return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
+    	return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
     }
 
     private Mono<XMessage> decodeXMessage(XMessage xMessage, ServiceResponse response, String formID, Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment) {
         XMessage nextMessage = getMessageFromResponse(xMessage, response);
         if (isEndOfForm(response)) {
             return Mono.zip(
-                            appendNewResponse(formID, xMessage, response),
-                            replaceUserState(formID, xMessage, response),
-                            updateQuestionAndAssessment,
-                            Mono.just(new UploadService().submit(response.currentResponseState, restTemplate, customRestTemplate))
-                    )
+                    appendNewResponse(formID, xMessage, response),
+                    replaceUserState(formID, xMessage, response),
+                    updateQuestionAndAssessment,
+                    Mono.just(new UploadService().submit(response.currentResponseState, restTemplate, customRestTemplate))
+            )
                     .then(Mono.just(getClone(nextMessage)));
         } else {
             return Mono.zip(
-                            appendNewResponse(formID, xMessage, response),
-                            replaceUserState(formID, xMessage, response),
-                            updateQuestionAndAssessment
-                    )
+                    appendNewResponse(formID, xMessage, response),
+                    replaceUserState(formID, xMessage, response),
+                    updateQuestionAndAssessment
+            )
                     .then(Mono.just(getClone(nextMessage)));
         }
     }
@@ -825,14 +797,13 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     /**
      * Get Meta data value by key in a transformer
-     *
      * @param transformer
      * @param key
      * @return meta data value
      */
     private String getTransformerMetaDataValue(Transformer transformer, String key) {
         Map<String, String> metaData = transformer.getMetaData();
-        if (metaData.get(key) != null && !metaData.get(key).toString().isEmpty()) {
+        if(metaData.get(key) != null && !metaData.get(key).toString().isEmpty()) {
             return metaData.get(key).toString();
         }
         return "";
@@ -857,11 +828,11 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     public static String getFormPath(String formID) {
-        FormsDao dao = new FormsDao(JsonDB.getInstance().getDB());
-        try {
+    	FormsDao dao = new FormsDao(JsonDB.getInstance().getDB());
+        try{
             return dao.getFormsCursorForFormId(formID).getFormFilePath();
-        } catch (NullPointerException ex) {
-            log.info("ODK form not found '" + formID + "'");
+        } catch (NullPointerException ex){
+            log.info("ODK form not found '"+formID+"'");
             return null;
         }
     }
@@ -913,8 +884,8 @@ public class ODKConsumerReactive extends TransformerProvider {
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
     }
-
+    
     private String redisKeyWithPrefix(String key) {
-        return System.getenv("ENV") + "-" + key;
+    	return System.getenv("ENV")+"-"+key;
     }
 }
