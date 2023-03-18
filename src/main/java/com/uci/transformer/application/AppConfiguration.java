@@ -1,6 +1,10 @@
 package com.uci.transformer.application;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.uci.adapter.cdn.FileCdnFactory;
+import com.uci.adapter.cdn.service.AzureBlobService;
+import com.uci.adapter.cdn.service.MinioClientService;
+import com.uci.adapter.cdn.service.SunbirdCloudMediaService;
 import io.fusionauth.client.FusionAuthClient;
 
 import org.apache.http.auth.AuthScope;
@@ -152,6 +156,26 @@ public class AppConfiguration {
     KafkaTemplate<String, String> kafkaTemplate() {
     	KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory());
     	return (KafkaTemplate<String, String>) kafkaTemplate;
+    }
+
+    @Bean
+    public FileCdnFactory fileCdnFactory() {
+        return new FileCdnFactory();
+    }
+
+    @Bean
+    public MinioClientService minioClientService() {
+        return new MinioClientService();
+    }
+
+    @Bean
+    public AzureBlobService azureBlobService() {
+        return new AzureBlobService();
+    }
+
+    @Bean
+    public SunbirdCloudMediaService sunbirdCloudMediaService() {
+        return new SunbirdCloudMediaService();
     }
 
 //    @Bean
