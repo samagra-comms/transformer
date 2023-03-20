@@ -226,7 +226,7 @@ public class GenericTransformerConsumer {
     }
 
     private void sendDoubtnutAPI(GenericOutboundMessage genericOutboundMessage, XMessage msg, String msgType) {
-        log.info("sending request to doubtnut...");
+        log.info("sending request to doubtnut..."+genericOutboundMessage);
         WebClient.builder()
                 .baseUrl(url)
                 .defaultHeader("Message-Type", msgType)
