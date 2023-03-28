@@ -1,10 +1,7 @@
 package com.uci.transformer.controllers;
 
 
-import com.uci.transformer.odk.FormDownloader;
-import com.uci.transformer.odk.MenuManager;
-import com.uci.transformer.odk.ODKConsumerReactive;
-import com.uci.transformer.odk.ServiceResponse;
+import com.uci.transformer.odk.*;
 import com.uci.transformer.odk.model.Form;
 import com.uci.transformer.odk.model.FormDetails;
 import com.uci.transformer.odk.openrosa.OpenRosaAPIClient;
@@ -22,7 +19,8 @@ import lombok.extern.java.Log;
 import okhttp3.OkHttpClient;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,7 +40,7 @@ public class FormTransformerTestAPI {
 
     private static final String template = "Hello, %s!";
     private final AtomicLong counter = new AtomicLong();
-    
+
     @Autowired
     public RedisCacheService redisCacheService;
 
@@ -88,8 +86,13 @@ public class FormTransformerTestAPI {
     }
 
     @GetMapping("/odk/updateAll")
-    public void updateForms(){
-        downloadForms();
+    public ResponseEntity<String> updateForms(){
+        new Thread(){
+            public void run(){
+                downloadForms();
+            }
+        }.start();
+        return new ResponseEntity<>("Downloading Start", HttpStatus.OK);
     }
 
     @SneakyThrows
