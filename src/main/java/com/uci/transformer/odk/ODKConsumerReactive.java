@@ -236,8 +236,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                         String serviceClass = getTransformerMetaDataValue(transformer, "serviceClass");
                         JSONObject user = null;
                         if (serviceClass.equalsIgnoreCase(SurveyService.class.getSimpleName())) {
-                            String mobileNo = xMessage.getTo().getUserID().replace("ucipwa:", "");
-                            user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, mobileNo);
+                            String[] mobileNo = xMessage.getTo().getUserID().split(":");
+                            if(mobileNo[1] != null && !mobileNo[1].isEmpty()) {
+                                user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, mobileNo[1]);
+                            }
                         } else {
                             user = userService.getUserByPhoneFromFederatedServers(
                                     getTransformerMetaDataValue(transformer, "botId"),
