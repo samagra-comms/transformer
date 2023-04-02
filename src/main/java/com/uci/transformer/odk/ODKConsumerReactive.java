@@ -163,9 +163,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     if (transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
                                                             && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
                                                             && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
+                                                        log.info("CP-04" +  transformedMessage.toXML());
                                                         kafkaProducer.send(genericTransformer, transformedMessage.toXML());
 
                                                     } else {
+                                                        log.info("CP-05" +  transformedMessage.toXML());
                                                         kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
                                                     }
                                                     long endTime = System.nanoTime();
