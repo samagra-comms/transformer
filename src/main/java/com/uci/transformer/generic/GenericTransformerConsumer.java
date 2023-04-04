@@ -91,6 +91,7 @@ public class GenericTransformerConsumer {
                 }
                 msg.setSessionId(UUID.randomUUID());
                 msg.setPayload(payload);
+                log.info("CP-01" + msg.toXML());
                 kafkaProducer.send(processOutbound, msg.toXML());
             } else {
 
@@ -273,6 +274,7 @@ public class GenericTransformerConsumer {
                                 }
                                 msg.setPayload(payload);
                                 try {
+                                    log.info("CP-02" + msg.toXML());
                                     kafkaProducer.send(processOutbound, msg.toXML());
                                 } catch (JAXBException e) {
                                     throw new RuntimeException(e);
@@ -302,6 +304,7 @@ public class GenericTransformerConsumer {
             payload.setMedia(messageMedia);
         }
         msg.setPayload(payload);
+        log.info("CP-03" + msg.toXML());
         kafkaProducer.send(processOutbound, msg.toXML());
     }
 }

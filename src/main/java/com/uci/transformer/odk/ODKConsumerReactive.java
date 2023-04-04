@@ -163,9 +163,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     if (transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
                                                             && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
                                                             && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
+                                                        log.info("CP-04" +  transformedMessage.toXML());
                                                         kafkaProducer.send(genericTransformer, transformedMessage.toXML());
 
                                                     } else {
+                                                        log.info("CP-05" +  transformedMessage.toXML());
                                                         kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
                                                     }
                                                     long endTime = System.nanoTime();
@@ -239,7 +241,10 @@ public class ODKConsumerReactive extends TransformerProvider {
                         String serviceClass = getTransformerMetaDataValue(transformer, "serviceClass");
                         JSONObject user = null;
                         if (serviceClass.equalsIgnoreCase(SurveyService.class.getSimpleName())) {
-                            user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, xMessage.getTo().getUserID());
+                            String[] mobileNo = xMessage.getTo().getUserID().split(":");
+                            if(mobileNo[1] != null && !mobileNo[1].isEmpty()) {
+                                user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, mobileNo[1]);
+                            }
                         } else {
                             user = userService.getUserByPhoneFromFederatedServers(
                                     getTransformerMetaDataValue(transformer, "botId"),
