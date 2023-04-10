@@ -39,7 +39,7 @@ import java.util.Map;
 @EnableAsync
 @EnableCaching
 @EnableReactiveCassandraRepositories("com.uci.dao")
-@ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils"})
+@ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils", "com.uci.dao.service"})
 @EnableR2dbcRepositories(basePackages = {"com.uci.transformer.odk.repository"})
 @EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.messagerosa", "com.uci.dao"})
 @SpringBootApplication
