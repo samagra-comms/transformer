@@ -174,17 +174,20 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     long duration = (endTime - startTime);
                                                     log.error("Total time spent in processing form: " + duration / 1000000);
                                                 } catch (JAXBException e) {
+                                                    log.error("An error occured : " + e.getMessage());
                                                     e.printStackTrace();
                                                 }
                                             }
                                         }
                                     });
                         } catch (JAXBException e) {
+                            log.error("An error occured : " + e.getMessage());
                             e.printStackTrace();
                         } catch (NullPointerException e) {
                             log.error("An error occured : "+e.getMessage() + " at line no : "+ e.getStackTrace()[0].getLineNumber()
                                     +" in class : "+e.getStackTrace()[0].getClassName());
                         } catch (Exception e) {
+                            log.error("An error occured : " + e.getMessage());
                             e.printStackTrace();
                         }
                     }
@@ -192,8 +195,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .doOnError(new Consumer<Throwable>() {
                     @Override
                     public void accept(Throwable e) {
-                        System.out.println(e.getMessage());
-                        log.error("KafkaFlux exception", e);
+                        log.error("KafkaFlux exception", e.getMessage());
+                        e.printStackTrace();
                     }
                 }).subscribe();
 
@@ -239,8 +242,13 @@ public class ODKConsumerReactive extends TransformerProvider {
                         JSONObject user = null;
                         if (serviceClass.equalsIgnoreCase(SurveyService.class.getSimpleName())) {
                             String[] mobileNo = xMessage.getTo().getUserID().split(":");
-                            if(mobileNo[1] != null && !mobileNo[1].isEmpty()) {
-                                user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, mobileNo[1]);
+                            try {
+                                if (mobileNo[1] != null && !mobileNo[1].isEmpty()) {
+                                    user = surveyService.getUserByPhoneFromFederatedServers(hiddenFieldsStr, mobileNo[1]);
+                                }
+                            } catch (ArrayIndexOutOfBoundsException ex){
+                                user = null;
+                                log.error("An error occured : "+ex.getMessage());
                             }
                         } else {
                             user = userService.getUserByPhoneFromFederatedServers(
@@ -644,6 +652,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath, validResponse);
             }
         } catch (Exception e) {
+            log.error("An error occured : " + e.getMessage());
             e.printStackTrace();
         }
         log.info("question xpath:"+question.getXPath()+",answer: "+assessment.getAnswer());
