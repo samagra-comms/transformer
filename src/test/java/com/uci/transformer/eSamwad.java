@@ -1,6 +1,6 @@
 package com.uci.transformer;
 
-import com.uci.transformer.User.UserService;
+import com.uci.utils.service.UserService;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 

@@ -1,9 +1,15 @@
 package com.uci.transformer.health;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uci.dao.service.HealthService;
+import com.uci.utils.model.ApiResponse;
+import com.uci.utils.model.ApiResponseParams;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.health.Status;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -13,10 +19,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class HealthController {
 
+	@Autowired
+	private HealthService healthService;
+	
     @RequestMapping(value = "/health", method = RequestMethod.GET, produces = { "application/json", "text/json" })
-    public ResponseEntity<JsonNode> statusCheck() throws JsonProcessingException {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode json = mapper.readTree("{\"id\":\"api.content.health\",\"ver\":\"3.0\",\"ts\":\"2021-06-26T22:47:05Z+05:30\",\"params\":{\"resmsgid\":\"859fee0c-94d6-4a0d-b786-2025d763b78a\",\"msgid\":null,\"err\":null,\"status\":\"successful\",\"errmsg\":null},\"responseCode\":\"OK\",\"result\":{\"checks\":[{\"name\":\"redis cache\",\"healthy\":true},{\"name\":\"graph db\",\"healthy\":true},{\"name\":\"cassandra db\",\"healthy\":true}],\"healthy\":true}}");
-        return ResponseEntity.ok(json);
+    public Mono<ResponseEntity<ApiResponse>> statusCheck() {
+		return healthService.getAllHealthNode().map(health -> ApiResponse.builder()
+				.id("api.health")
+				.params(ApiResponseParams.builder().build())
+				.result(health)
+				.build()
+		).map(response -> {
+			if (((JsonNode)response.result).get("status").textValue().equals(Status.UP.getCode())) {
+				response.responseCode = HttpStatus.OK.name();
+				return new ResponseEntity<>(response, HttpStatus.OK);
+			}
+			else {
+				response.responseCode = HttpStatus.SERVICE_UNAVAILABLE.name();
+				return new ResponseEntity<>(response, HttpStatus.SERVICE_UNAVAILABLE);
+			}
+		});
     }
 }

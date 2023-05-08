@@ -89,7 +89,7 @@ public class OpenRosaAPIClient {
             URL url = new URL(downloadUrl);
             uri = url.toURI();
         } catch (MalformedURLException | URISyntaxException e) {
-            log.error(e + "Unable to get a URI for download URL : %s  due to %s : ", downloadUrl, e.getMessage());
+            log.error(e + "Unable to get a URI for download URL : %s  due to %s : " + downloadUrl + e.getMessage());
             throw e;
         }
 

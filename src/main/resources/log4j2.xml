@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration packages="com.uci.inbound" status="info" name="spring-boot-kafka-log">
+	<Properties>
+		<Property name="kafka.topic">${env:KAFKA_LOGS_TOPIC}</Property>
+		<Property name="kafka.bootstrap.servers">${env:BOOTSTRAP_SERVERS}</Property>
+	</Properties>
+	<Appenders>
+		<customKafka name="KafkaLogAppender" topic="${kafka.topic}" syncSend="false">
+			<PatternLayout pattern="%message" />
+			<Property name="bootstrap.servers">${kafka.bootstrap.servers}</Property>
+		</customKafka>
+
+		<Console name="stdout" target="SYSTEM_OUT">
+			<PatternLayout
+				pattern="%d{HH:mm:ss.SSS} stdout %highlight(%-5p) [%-7t] %F:%L - %m%n" />
+		</Console>
+
+		<Console name="stderr" target="SYSTEM_OUT">
+			<PatternLayout
+				pattern="%d{HH:mm:ss.SSS} stderr %highlight(%-5p) [%-7t] %F:%L - %m%n" />
+		</Console>
+
+	</Appenders>
+	<Loggers>
+		<Root level="INFO">
+			<AppenderRef ref="KafkaLogAppender" />
+			<AppenderRef ref="stdout" />
+			<AppenderRef ref="stderr" />
+		</Root>
+		<Logger name="org.apache.kafka" level="WARN" />
+		<!-- <Logger name="LOGGER_WITH_JSON_LAYOUT" level="INFO" additivity="false"> 
+			<AppendRef ref="KafkaLogAppender" /> </Logger> -->
+	</Loggers>
+</Configuration>

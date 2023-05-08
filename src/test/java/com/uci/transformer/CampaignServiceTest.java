@@ -1,7 +1,5 @@
 package com.uci.transformer;
 
-import com.uci.utils.CampaignService;
-import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
 public class CampaignServiceTest {

@@ -1,6 +1,6 @@
 package com.uci.transformer.samagra;
 
-import com.uci.transformer.User.UserService;
+import com.uci.utils.service.UserService;
 import io.fusionauth.domain.User;
 import lombok.Builder;
 import org.joda.time.DateTime;
@@ -13,6 +13,7 @@ import java.util.Calendar;
 @Builder
 public class LeaveManager {
     User user;
+    UserService userService;
 
     public int getCurrentLeaves() {
         return (int) user.data.get("currentLeaves");
@@ -77,7 +78,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", accruedLeaves + previousLeaves - workingDays);
         user.data.put("leavesAvailable", Math.round(accruedLeaves + previousLeaves) - workingDays);
 
-        UserService.update(user);
+        userService.update(user);
 
     }
 
@@ -90,7 +91,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", existingLeaves + workingDays);
         user.data.put("leavesAvailable", Math.round(existingLeaves + workingDays));
 
-       return UserService.update(user);
+       return userService.update(user);
 
     }
 
@@ -103,7 +104,7 @@ public class LeaveManager {
         user.data.put("accurateLeaves", existingLeaves - workingDays);
         user.data.put("leavesAvailable", Math.round(existingLeaves - workingDays));
 
-        return UserService.update(user);
+        return userService.update(user);
     }
 
     private double getExistingLeaves() {

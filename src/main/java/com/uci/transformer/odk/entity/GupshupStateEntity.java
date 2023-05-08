@@ -1,33 +1,36 @@
 package com.uci.transformer.odk.entity;
 
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import javax.persistence.*;
+import lombok.*;
 
+import javax.persistence.*;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.annotation.Id;
+
+
+@Data
 @Getter
 @Setter
 @AllArgsConstructor
 @Entity
 @NoArgsConstructor
-@Table(name = "xmessage_state")
+@Table(value = "xmessage_state")
 public class GupshupStateEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(nullable = false, name = "phone_no")
+  @Column(value = "phone_no")
   private String phoneNo;
 
-  @Column(name = "state")
+  @Column(value = "state")
   private String xmlPrevious;
   
-  @Column(name = "previous_path")
+  @Column(value = "previous_path")
   private String previousPath;
 
-  @Column(name = "bot_form_name")
+  @Column(value = "bot_form_name")
   private String botFormName;
   
 }

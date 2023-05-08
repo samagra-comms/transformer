@@ -2,28 +2,30 @@ package com.uci.transformer.odk.entity;
 
 import javax.persistence.*;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.annotation.Id;
 
+@Data
 @Getter
 @Setter
 @AllArgsConstructor
 @Entity
 @NoArgsConstructor
-@Table(name = "xmessage")
+@Table(value = "xmessage")
 public class GupshupMessageEntity {
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
   
-  @Column(nullable = false, name = "phone_no")
+  @Column(value = "phone_no")
   private String phoneNo;
   
-  @Column(nullable = false, name = "message")
+  @Column(value = "message")
   private String message;
 
-  @Column(name = "is_last_message")
+  @Column(value = "is_last_message")
   private boolean isLastResponse;
 }

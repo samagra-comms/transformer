@@ -12,6 +12,8 @@
   <include file="db/migration/002_gupshup_state.sql"/>
   <include file="db/migration/003_scheduled_tasks.sql"/>
   <include file="db/migration/004_update_xmessage_state.sql"/>
-  <include file="db/migration/005_create_question_assessment.sql"/>
+  <include file="db/migration/006_create_question_assessment.sql"/>
+  <include file="db/migration/007_update_phoneno_type.sql"/>
+  <include file="db/migration/008_update_phoneno_type.sql"/>
 
 </databaseChangeLog>

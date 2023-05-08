@@ -383,10 +383,10 @@ public class FileUtils {
         if (file != null && file.exists()) {
             // remove garbage
             if (!file.delete()) {
-                log.error("%s will be deleted upon exit.", file.getAbsolutePath());
+                log.error(file.getAbsolutePath() + " will be deleted upon exit.");
                 file.deleteOnExit();
             } else {
-                log.error("%s has been deleted.", file.getAbsolutePath());
+                log.error(file.getAbsolutePath() + " has been deleted.");
             }
         }
     }

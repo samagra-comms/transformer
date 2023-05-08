@@ -2,7 +2,7 @@ package com.uci.transformer.application;
 
 import com.uci.transformer.odk.FormDownloader;
 import com.uci.transformer.odk.FormManager;
-import com.uci.transformer.odk.ODKTransformer;
+import com.uci.transformer.odk.ODKConsumerReactive;
 import com.uci.transformer.odk.ServiceResponse;
 import com.uci.transformer.odk.model.Form;
 import com.uci.transformer.odk.model.FormDetails;
@@ -21,10 +21,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.ComponentScan;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.cassandra.repository.config.EnableReactiveCassandraRepositories;
+import org.springframework.data.r2dbc.repository.config.EnableR2dbcRepositories;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.util.FileSystemUtils;
+import reactor.blockhound.BlockHound;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
@@ -36,9 +38,10 @@ import java.util.Map;
 @EnableKafka
 @EnableAsync
 @EnableCaching
-@ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils"})
-@EnableJpaRepositories(basePackages = {"com.uci.transformer.odk.entity", "com.uci.transformer"})
-@EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.transformer", "com.uci.transformer.odk"})
+@EnableReactiveCassandraRepositories("com.uci.dao")
+@ComponentScan(basePackages = {"com.uci.transformer", "messagerosa", "com.uci.utils", "com.uci.dao.service"})
+@EnableR2dbcRepositories(basePackages = {"com.uci.transformer.odk.repository"})
+@EntityScan(basePackages = {"com.uci.transformer.odk.entity", "com.uci.messagerosa", "com.uci.dao"})
 @SpringBootApplication
 @Slf4j
 public class TransformerApplication {
@@ -50,12 +53,15 @@ public class TransformerApplication {
 
     @PostConstruct
     private void postConstruct() {
-         // downloadForms();
-        // testFormManager();
+    	String downloadFormsFlag = System.getenv("DOWNLOAD_TRANSFORMER_FORMS");
+        if(!(downloadFormsFlag != null && downloadFormsFlag.equalsIgnoreCase("False"))) {
+        	downloadForms();        	
+        }
+    	// testFormManager();
     }
 
     private void testFormManager() {
-        String formPath = ODKTransformer.getFormPath("samagra_workflows_form");
+        String formPath = ODKConsumerReactive.getFormPath("samagra_workflows_form");
         ServiceResponse response1 = new FormManager(null, null, null, formPath).start();
         log.debug("First response");
         log.debug(response1.getCurrentIndex(), response1.getNextMessage().getText());

@@ -1,10 +1,7 @@
-package com.uci.transformer.application;
+package com.uci.transformer.controllers;
 
 
-import com.uci.transformer.odk.FormDownloader;
-import com.uci.transformer.odk.MenuManager;
-import com.uci.transformer.odk.ODKTransformer;
-import com.uci.transformer.odk.ServiceResponse;
+import com.uci.transformer.odk.*;
 import com.uci.transformer.odk.model.Form;
 import com.uci.transformer.odk.model.FormDetails;
 import com.uci.transformer.odk.openrosa.OpenRosaAPIClient;
@@ -15,9 +12,15 @@ import com.uci.transformer.odk.persistance.FormsDao;
 import com.uci.transformer.odk.persistance.JsonDB;
 import com.uci.transformer.odk.utilities.FormListDownloader;
 import com.uci.transformer.odk.utilities.WebCredentialsUtils;
+import com.uci.utils.cache.service.RedisCacheService;
+
 import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import okhttp3.OkHttpClient;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +40,9 @@ public class FormTransformerTestAPI {
 
     private static final String template = "Hello, %s!";
     private final AtomicLong counter = new AtomicLong();
+
+    @Autowired
+    public RedisCacheService redisCacheService;
 
     private void downloadForms() {
         //Empty the database and folder
@@ -80,8 +86,13 @@ public class FormTransformerTestAPI {
     }
 
     @GetMapping("/odk/updateAll")
-    public void updateForms(){
-        downloadForms();
+    public ResponseEntity<String> updateForms(){
+        new Thread(){
+            public void run(){
+                downloadForms();
+            }
+        }.start();
+        return new ResponseEntity<>("Downloading Start", HttpStatus.OK);
     }
 
     @SneakyThrows
@@ -98,8 +109,8 @@ public class FormTransformerTestAPI {
         log.info("CurrentAnswer" +  currentAnswer);
         log.info("InstanceCurrentXML" + instanceXMlPrevious);
         log.info("botFormName" +  botFormName);
-        String formPath = ODKTransformer.getFormPath(botFormName);
-        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName).start();
+        String formPath = ODKConsumerReactive.getFormPath(botFormName);
+        ServiceResponse serviceResponse = new MenuManager(previousPath, currentAnswer, instanceXMlPrevious, formPath, botFormName, redisCacheService, "1234567890", "bot", null, null).start();
         System.out.println(serviceResponse.getCurrentResponseState());
         return serviceResponse;
     }

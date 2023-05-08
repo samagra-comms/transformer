@@ -67,7 +67,7 @@ public class OkHttpConnection implements OpenRosaHttpInterface {
 
         if (statusCode != HttpURLConnection.HTTP_OK) {
             discardEntityBytes(response);
-            log.info("Error: %s (%s at %s", response.message(), String.valueOf(statusCode), uri.toString());
+            log.info("Error: "+ response.message() + " " +String.valueOf(statusCode) + " " + uri.toString());
 
             return new HttpGetResult(null, new HashMap<String, String>(), "", statusCode);
         }
