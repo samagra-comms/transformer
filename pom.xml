@@ -11,12 +11,16 @@
 	</parent>
 	<groupId>com.uci</groupId>
 	<artifactId>transformer</artifactId>
-	<version>2.2.0-SNAPSHOT</version>
+	<version>2.2.7</version>
 	<name>transformer</name>
 	<description>Demo project for Spring Boot</description>
 
 	<properties>
 		<java.version>11</java.version>
+		<utils.version>2.2.2</utils.version>
+		<dao.version>2.2.2</dao.version>
+		<adapter.version>2.2.2</adapter.version>
+		<message-rosa.version>2.2.2</message-rosa.version>
 	</properties>
 
 	<!-- For Downloading repositories from github packages -->
@@ -155,22 +159,22 @@
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>message-rosa</artifactId>
-			<version>2.2.0-SNAPSHOT</version>
+			<version>${message-rosa.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>utils</artifactId>
-			<version>2.2.0-SNAPSHOT</version>
+			<version>${utils.version}</version>
 		</dependency>
 		<dependency>
             <groupId>com.uci</groupId>
             <artifactId>dao</artifactId>
-            <version>2.2.0-SNAPSHOT</version>
+            <version>${dao.version}</version>
         </dependency>
 		<dependency>
 			<groupId>com.uci</groupId>
 			<artifactId>adapter</artifactId>
-			<version>2.2.0-SNAPSHOT</version>
+			<version>${adapter.version}</version>
 		</dependency>
 		<!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId> 
 			<version>1.0</version> </dependency> -->
