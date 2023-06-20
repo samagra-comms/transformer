@@ -17,10 +17,10 @@
 
     <properties>
         <java.version>11</java.version>
-        <utils.version>2.2.3</utils.version>
-        <dao.version>2.2.3</dao.version>
-        <adapter.version>2.2.3</adapter.version>
-        <message-rosa.version>2.2.3</message-rosa.version>
+        <utils.version>2.2.3-SNAPSHOT</utils.version>
+        <dao.version>2.2.3-SNAPSHOT</dao.version>
+        <adapter.version>2.2.3-SNAPSHOT</adapter.version>
+        <message-rosa.version>2.2.3-SNAPSHOT</message-rosa.version>
     </properties>
 
     <!-- For Downloading repositories from github packages -->
