@@ -100,7 +100,7 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     private MessageRepository msgRepo;
-    
+
     @Autowired
     XMessageRepository xMsgRepo;
 
@@ -114,23 +114,23 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     BotService botService;
-    
+
     @Autowired
     UserService userService;
 
     @Value("${producer.id}")
     private String producerID;
-    
+
     @Value("${assesment.character.go_to_start}")
     public String assesGoToStartChar;
-    
+
     public MenuManager menuManager;
-    
+
     public Boolean isStartingMessage;
-    
+
     @Autowired
     public PosthogService posthogService;
-    
+
     @Autowired
     public RedisCacheService redisCacheService;
 
@@ -201,7 +201,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 }).subscribe();
 
     }
-    
+
     @Override
     public Mono<XMessage> transform(XMessage xMessage) throws Exception {
     	XMessage[] finalXMsg = new XMessage[1];
@@ -485,7 +485,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                     }
                 });
     }
-    
+
     /**
      * Check if form has ended by xpath
      * @param xPath
@@ -558,7 +558,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     	}
     	return text.trim();
     }
-    
+
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
                                                                             Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
@@ -627,7 +627,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                 Transformer transformer, XMessage xMessage, Question question,
                                                 String currentXPath, Boolean validResponse) {
         if (question == null) question = existingQuestionStatus.getRight().get(0);
-        
+
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
         log.info("User uuid:"+userID);
 
@@ -644,9 +644,9 @@ public class ODKConsumerReactive extends TransformerProvider {
         	}else {
             	log.info("In saveAssessmentData, Question empty: "+question);
             }
-        	
+
         	if(question != null && !isStartingMessage) {
-        		
+
         		XMessagePayload questionPayload = menuManager.getQuestionPayloadFromXPath(question.getXPath());
 
                 sendEvents(xMessage, questionPayload, assessment, transformer, currentXPath, validResponse);
@@ -656,7 +656,7 @@ public class ODKConsumerReactive extends TransformerProvider {
             e.printStackTrace();
         }
         log.info("question xpath:"+question.getXPath()+",answer: "+assessment.getAnswer());
-        
+
         return assessmentRepo.save(assessment)
                 .doOnError(new Consumer<Throwable>() {
                     @Override
@@ -674,70 +674,71 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     private void sendEvents(XMessage xMessage, XMessagePayload questionPayload, Assessment assessment, Transformer transformer,
                             String currentXPath, Boolean validResponse) throws Exception {
-        log.info("find xmessage by app: "+xMessage.getApp()+", userId: "+xMessage.getTo().getUserID()+", fromId: admin, status: "+MessageState.SENT.name());
+        if (exhaustTelemetryEnabled.equalsIgnoreCase("true") || posthogEventEnabled.equalsIgnoreCase("true")) {
+            log.info("find xmessage by app: " + xMessage.getApp() + ", userId: " + xMessage.getTo().getUserID() + ", fromId: admin, status: " + MessageState.SENT.name());
+            /* Get Previous question XMessage */
+            getLastSentXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
+                    .subscribe(new Consumer<XMessageDAO>() {
+                        @Override
+                        public void accept(XMessageDAO xMsgDao) {
+                            log.info("found xMsgDao");
 
-        /* Get Previous question XMessage */
-        getLastSentXMessage(xMessage.getApp(), xMessage.getTo().getUserID())
-                .subscribe(new Consumer<XMessageDAO>() {
-                               @Override
-                               public void accept(XMessageDAO xMsgDao) {
-                                   log.info("found xMsgDao");
+                            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+                            LocalDateTime repliedTimestamp = null;
+                            /* Convert replied timestamp to local date time format */
+                            if (xMessage.getTimestamp() != null) {
+                                try {
+                                    LocalDateTime repliedAt = new Timestamp(new Date(xMessage.getTimestamp()).getTime()).toLocalDateTime();
+                                    String repliedAtTime = fmt.format(repliedAt).toString();
+                                    repliedTimestamp = LocalDateTime.parse(repliedAtTime, fmt);
+                                } catch (Exception ex) {
+                                    log.error("Exception when conversatin replied timestamp: " + ex.getMessage());
+                                }
+                            }
+                            /* If replied timestamp is null, use current date time as replied timestamp */
+                            if (repliedTimestamp == null) {
+                                LocalDateTime localNow = LocalDateTime.now();
+                                String current = fmt.format(localNow).toString();
+                                repliedTimestamp = LocalDateTime.parse(current, fmt);
+                            }
 
-                                   DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                                   LocalDateTime repliedTimestamp=null;
-                                   /* Convert replied timestamp to local date time format */
-                                   if(xMessage.getTimestamp() != null) {
-                                       try{
-                                           LocalDateTime repliedAt = new Timestamp(new Date(xMessage.getTimestamp()).getTime()).toLocalDateTime();
-                                           String repliedAtTime = fmt.format(repliedAt).toString();
-                                           repliedTimestamp = LocalDateTime.parse(repliedAtTime, fmt);
-                                       } catch (Exception ex) {
-                                           log.error("Exception when conversatin replied timestamp: "+ex.getMessage());
-                                       }
-                                   }
-                                   /* If replied timestamp is null, use current date time as replied timestamp */
-                                   if (repliedTimestamp == null) {
-                                       LocalDateTime localNow = LocalDateTime.now();
-                                       String current = fmt.format(localNow).toString();
-                                       repliedTimestamp = LocalDateTime.parse(current, fmt);
-                                   }
-
-                                   /* Last sent message timestamp  */
-                                   LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
-                                   long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
-                                   long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
-                                   String telemetryEvent = new AssessmentTelemetryBuilder()
-                                           .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
-                                                   xMessage.getChannel(),
-                                                   xMessage.getProvider(),
-                                                   producerID,
-                                                   getTransformerMetaDataValue(transformer, "botOwnerID"),
-                                                   assessment.getQuestion(),
-                                                   assessment,
-                                                   questionPayload,
-                                                   diff_secs,
-                                                   xMessage.getTo().getEncryptedDeviceID(),
-                                                   xMessage.getMessageId().getChannelMessageId(),
-                                                   isEndOfForm(currentXPath),
-                                                   xMessage.getSessionId(),
-                                                   validResponse);
-                                   log.info("Telemetry Event: " +telemetryEvent);
-                                   if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
-                                       try {
-                                           sendExhaustEvent(telemetryEvent);
-                                       } catch (Exception e) {
-                                           log.error("Exception in exhaust event: "+e.getMessage());
-                                       }
-                                   }
-                                   if (posthogEventEnabled.equalsIgnoreCase("true")) {
-                                       try {
-                                           sendPosthogEvent(xMessage, telemetryEvent, questionPayload, diff_milis);
-                                       } catch (Exception e) {
-                                           log.error("Exception in posthog event: "+e.getMessage());
-                                       }
-                                   }
-                               }
-                });
+                            /* Last sent message timestamp  */
+                            LocalDateTime sentTimestamp = xMsgDao.getTimestamp();
+                            long diff_milis = ChronoUnit.MILLIS.between(sentTimestamp, repliedTimestamp);
+                            long diff_secs = ChronoUnit.SECONDS.between(sentTimestamp, repliedTimestamp);
+                            String telemetryEvent = new AssessmentTelemetryBuilder()
+                                    .build(getTransformerMetaDataValue(transformer, "botOwnerOrgID"),
+                                            xMessage.getChannel(),
+                                            xMessage.getProvider(),
+                                            producerID,
+                                            getTransformerMetaDataValue(transformer, "botOwnerID"),
+                                            assessment.getQuestion(),
+                                            assessment,
+                                            questionPayload,
+                                            diff_secs,
+                                            xMessage.getTo().getEncryptedDeviceID(),
+                                            xMessage.getMessageId().getChannelMessageId(),
+                                            isEndOfForm(currentXPath),
+                                            xMessage.getSessionId(),
+                                            validResponse);
+                            log.info("Telemetry Event: " + telemetryEvent);
+                            if (exhaustTelemetryEnabled.equalsIgnoreCase("true")) {
+                                try {
+                                    sendExhaustEvent(telemetryEvent);
+                                } catch (Exception e) {
+                                    log.error("Exception in exhaust event: " + e.getMessage());
+                                }
+                            }
+                            if (posthogEventEnabled.equalsIgnoreCase("true")) {
+                                try {
+                                    sendPosthogEvent(xMessage, telemetryEvent, questionPayload, diff_milis);
+                                } catch (Exception e) {
+                                    log.error("Exception in posthog event: " + e.getMessage());
+                                }
+                            }
+                        }
+                    });
+        }
     }
 
     /**
@@ -907,7 +908,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         long duration = (endTime - startTime) / 1000000;
         log.info(String.format("CP-%d: %d ms", checkpointID, duration));
     }
-    
+
     private String redisKeyWithPrefix(String key) {
     	return System.getenv("ENV")+"-"+key;
     }
