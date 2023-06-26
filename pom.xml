@@ -1,27 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.3.1.RELEASE</version>
+        <version>2.5.7</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.uci</groupId>
     <artifactId>transformer</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>2.2.8</version>
     <name>transformer</name>
     <description>Demo project for Spring Boot</description>
 
     <properties>
         <java.version>11</java.version>
+        <utils.version>2.2.3</utils.version>
+        <dao.version>2.2.3</dao.version>
+        <adapter.version>2.2.3</adapter.version>
+        <message-rosa.version>2.2.3</message-rosa.version>
     </properties>
 
+    <!-- For Downloading repositories from github packages -->
     <repositories>
         <repository>
             <id>jcenter</id>
-            <url>https://jcenter.bintray.com </url>
+            <url>https://jcenter.bintray.com</url>
+        </repository>
+        <repository>
+            <id>github-utils</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/samagra-comms/utils</url>
+        </repository>
+        <repository>
+            <id>github-message-rosa</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/samagra-comms/message-rosa</url>
+        </repository>
+        <repository>
+            <id>github-dao</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/samagra-comms/dao</url>
+        </repository>
+        <repository>
+            <id>github-adapter</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/samagra-comms/adapter</url>
         </repository>
     </repositories>
 
@@ -29,6 +55,16 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.kafka</groupId>
@@ -47,23 +83,32 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.hibernate.javax.persistence</groupId>
-            <artifactId>hibernate-jpa-2.1-api</artifactId>
-            <version>1.0.2</version>
-        </dependency>
+        <!-- <dependency> -->
+        <!-- <groupId>org.hibernate.javax.persistence</groupId> -->
+        <!-- <artifactId>hibernate-jpa-2.1-api</artifactId> -->
+        <!-- <version>1.0.2</version> -->
+        <!-- </dependency> -->
         <dependency>
             <groupId>com.github.kagkarlsson</groupId>
             <artifactId>db-scheduler-spring-boot-starter</artifactId>
             <version>7.2</version>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+        <!-- <dependency> -->
+        <!-- <groupId>org.springframework.boot</groupId> -->
+        <!-- <artifactId>spring-boot-starter-data-jpa</artifactId> -->
+        <!-- </dependency> -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-r2dbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-postgresql</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.liquibase</groupId>
@@ -114,13 +159,25 @@
         <dependency>
             <groupId>com.uci</groupId>
             <artifactId>message-rosa</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>${message-rosa.version}</version>
         </dependency>
         <dependency>
             <groupId>com.uci</groupId>
             <artifactId>utils</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>${utils.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.uci</groupId>
+            <artifactId>dao</artifactId>
+            <version>${dao.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.uci</groupId>
+            <artifactId>adapter</artifactId>
+            <version>${adapter.version}</version>
+        </dependency>
+        <!-- <dependency> <groupId>com.uci</groupId> <artifactId>dao</artifactId>
+            <version>1.0</version> </dependency> -->
         <dependency>
             <groupId>org.opendatakit</groupId>
             <artifactId>opendatakit-javarosa</artifactId>
@@ -129,12 +186,21 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>
-            <version>5.2.7.RELEASE</version>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
             <version>2.7</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>30.1.1-jre</version>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor.tools</groupId>
+            <artifactId>blockhound</artifactId>
+            <version>1.0.6.RELEASE</version>
         </dependency>
         <dependency>
             <groupId>com.google.android</groupId>
@@ -145,21 +211,19 @@
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.data</groupId>
-            <artifactId>spring-data-jpa</artifactId>
-            <scope>compile</scope>
-        </dependency>
+        <!-- <dependency> -->
+        <!-- <groupId>org.springframework.data</groupId> -->
+        <!-- <artifactId>spring-data-jpa</artifactId> -->
+        <!-- <scope>compile</scope> -->
+        <!-- </dependency> -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.11.0</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.11.0</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -216,7 +280,37 @@
             <version>2.6</version>
             <scope>compile</scope>
         </dependency>
-
+        <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-postgresql</artifactId>
+            <version>0.8.3.RELEASE</version>
+        </dependency>
+        <!--		<dependency>-->
+        <!--			<groupId>org.springframework.boot</groupId>-->
+        <!--			<artifactId>spring-boot-devtools</artifactId>-->
+        <!--		</dependency>-->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-redis</artifactId>
+            <version>2.3.3.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>3.3.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.sunbird/cloud-store-sdk -->
+        <dependency>
+            <groupId>org.sunbird</groupId>
+            <artifactId>cloud-store-sdk_2.12</artifactId>
+            <version>1.4.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>3.0-rc3</version>
+        </dependency>
     </dependencies>
 
     <build>

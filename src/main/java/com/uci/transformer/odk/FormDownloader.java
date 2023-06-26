@@ -158,7 +158,7 @@ public class FormDownloader {
                 log.error("Form uri = null");
             }
         } catch (IOException e) {
-            log.error(e.getMessage());
+            log.error("CP-41 => " + e.getMessage());
 //
 //            if (uriResult.isNew() && fileResult.isNew()) {
 //                Uri uri = uriResult.getUri();
@@ -195,7 +195,7 @@ public class FormDownloader {
         if (msg == null) {
             msg = e.toString();
         }
-        log.error(msg);
+        log.error("CP-6" + msg);
 
         if (e.getCause() != null) {
             msg = e.getCause().getMessage();
@@ -292,7 +292,7 @@ public class FormDownloader {
         int attemptCount = 0;
         final int MAX_ATTEMPT_COUNT = 2;
         while (!success && ++attemptCount <= MAX_ATTEMPT_COUNT) {
-            log.info("Started downloading to %s from %s", tempFile.getAbsolutePath(), downloadUrl);
+            log.info(String.format("Started downloading to %s from %s", tempFile.getAbsolutePath(), downloadUrl));
 
             InputStream is = null;
             OutputStream os = null;
@@ -310,7 +310,7 @@ public class FormDownloader {
                 success = true;
 
             } catch (Exception e) {
-                log.error(e.toString());
+                log.error("CP-2" + e.toString());
                 FileUtils.deleteAndReport(tempFile);
                 if (attemptCount == MAX_ATTEMPT_COUNT) {
                     throw e;
@@ -320,7 +320,7 @@ public class FormDownloader {
                     try {
                         os.close();
                     } catch (Exception e) {
-                        log.error(e.getMessage());
+                        log.error("CP-4" + e.getMessage());
                     }
                 }
                 if (is != null) {
@@ -333,15 +333,15 @@ public class FormDownloader {
                     try {
                         is.close();
                     } catch (Exception e) {
-                        log.error(e.getMessage());
+                        log.error("CP-3" + e.getMessage());
                     }
                 }
             }
 
         }
 
-        log.error("Completed downloading of %s. It will be moved to the proper path...",
-                tempFile.getAbsolutePath());
+        log.error(String.format("Completed downloading of %s. It will be moved to the proper path...",
+                tempFile.getAbsolutePath()));
 
         FileUtils.deleteAndReport(file);
 

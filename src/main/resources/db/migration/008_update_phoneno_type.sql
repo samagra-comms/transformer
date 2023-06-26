@@ -1,0 +1,1 @@
+ALTER TABLE xmessage_state ALTER COLUMN phone_no TYPE varchar(200);

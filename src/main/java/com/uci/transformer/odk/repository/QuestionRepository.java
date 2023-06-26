@@ -1,15 +1,13 @@
 package com.uci.transformer.odk.repository;
 
-import com.uci.transformer.odk.entity.GupshupStateEntity;
 import com.uci.transformer.odk.entity.Question;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
 
-import java.util.List;
 import java.util.UUID;
 
-@Repository
-public interface QuestionRepository extends JpaRepository<Question, UUID> {
+public interface QuestionRepository extends R2dbcRepository<Question, UUID> {
 
-    List<Question> findQuestionByXPathAndFormIDAndFormVersion(String xPath, String formID, String formVersion);
+    Flux<Question> findQuestionByXPathAndFormIDAndFormVersion(String xPath, String formID, String formVersion);
 }

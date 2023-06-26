@@ -25,8 +25,6 @@ import java.util.Date;
 @Component
 public class UploadService {
 
-
-
     private static HttpHeaders getVerifyHttpHeader4() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -52,8 +50,8 @@ public class UploadService {
 
     public boolean submit(String form, RestTemplate restTemplate, RestTemplate customRestTemplate) {
         try {
-            String ODK = "https://agg.staging.saksham.samagra.io/Aggregate.html#submissions/filter///";
-            String ODK2 = "https://agg.staging.saksham.samagra.io/submission";
+            String ODK = System.getenv("ODK_URL") + "/Aggregate.html#submissions/filter///";
+            String ODK2 = System.getenv("ODK_URL") + "/submission";
             HttpEntity<String> request = new HttpEntity<String>(getVerifyHttpHeader4());
             HttpEntity<String> response = customRestTemplate.exchange(ODK, HttpMethod.GET, request, String.class);
             System.out.println(new ObjectMapper().writeValueAsString(response));
@@ -80,6 +78,7 @@ public class UploadService {
 
             return true;
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
 

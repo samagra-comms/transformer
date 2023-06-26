@@ -1,28 +1,31 @@
 package com.uci.transformer.odk.entity;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 import lombok.*;
-import org.hibernate.annotations.*;
+import io.r2dbc.postgresql.codec.Json;
 
 import javax.persistence.*;
 import javax.persistence.Entity;
-import javax.persistence.Table;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.annotation.Id;
 
+
+@Data
 @Getter
 @Setter
 @AllArgsConstructor
 @Entity
+@Builder
 @NoArgsConstructor
-@Table(name = "question")
-@TypeDefs({
-        @TypeDef(name = "json", typeClass = JsonType.class),
-        @TypeDef(name = "jsonb", typeClass = JsonType.class)
-})
+@Table(value = "question")
 public class Question {
 
     public enum QuestionType {
@@ -39,29 +42,28 @@ public class Question {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(nullable = false, name = "form_id")
+    @Column(value = "form_id")
     private String formID;
 
-    @Column(name = "form_version")
+    @Column(value = "form_version")
     private String formVersion;
 
-    @Column(name = "x_path")
+    @Column(value = "x_path")
     private String XPath;
 
-    @Column(name = "question_type")
+    @Column(value = "question_type")
     @Enumerated(EnumType.STRING)
     private QuestionType questionType;
 
-    @Type(type = "jsonb")
-    @Column(name = "meta", columnDefinition = "jsonb")
-    private Meta meta;
+    @JsonSerialize(using = PgJsonObjectSerializer.class)
+    @JsonDeserialize(using = PgJsonObjectDeserializer.class)
+    @Column(value = "meta")
+    private Json meta;
 
-    @Column(name = "updated")
-    @UpdateTimestamp
+    @Column(value = "updated")
     private LocalDateTime updatedOn;
 
-    @Column(name = "created")
-    @CreationTimestamp
+    @Column(value = "created")
     private LocalDateTime createdOn;
 
 }

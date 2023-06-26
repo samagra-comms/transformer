@@ -1,27 +1,28 @@
 package com.uci.transformer.odk.entity;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.vladmihalcea.hibernate.type.json.JsonType;
+import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
-import org.hibernate.annotations.*;
 
 import javax.persistence.*;
-import javax.persistence.Entity;
-import javax.persistence.Table;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.annotation.Id;
 
+
+@Data
 @Getter
 @Setter
 @AllArgsConstructor
 @Entity
 @NoArgsConstructor
 @Builder
-@Table(name = "assessment")
-@TypeDefs({
-        @TypeDef(name = "json", typeClass = JsonType.class),
-        @TypeDef(name = "jsonb", typeClass = JsonType.class)
-})
+@Table(value = "assessment")
 public class Assessment {
 
     @Id
@@ -29,32 +30,31 @@ public class Assessment {
     private UUID id;
 
     @ManyToOne
-    @JoinColumn(name = "question")
+    @Column(value = "question")
     private Question question;
 
     // Has to be encrypted.
-    @Column(name = "answer")
+    @Column(value = "answer")
     private String answer;
 
-    @Column(name = "bot_id")
+    @Column(value = "bot_id")
     private UUID botID;
 
-    @Column(name = "user_id")
+    @Column(value = "user_id")
     private UUID userID;
 
-    @Column(name = "device_id")
+    @Column(value = "device_id")
     private UUID deviceID;
 
-    @Type(type = "jsonb")
-    @Column(name = "meta", columnDefinition = "jsonb")
-    private Meta meta;
+    @JsonSerialize(using = PgJsonObjectSerializer.class)
+    @JsonDeserialize(using = PgJsonObjectDeserializer.class)
+    @Column(value = "meta")
+    private Json meta;
 
-    @Column(name = "updated")
-    @UpdateTimestamp
+    @Column(value = "updated")
     private LocalDateTime updatedOn;
 
-    @Column(name = "created")
-    @CreationTimestamp
+    @Column(value = "created")
     private LocalDateTime createdOn;
 
 }

@@ -3,14 +3,13 @@ package com.uci.transformer.odk.persistance;
 import io.jsondb.JsonDBTemplate;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.security.GeneralSecurityException;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class JsonDBTest {
 
     @Test
-    public void testJSONDBSetup() throws GeneralSecurityException, IOException {
+    public void testJSONDBSetup() {
         JsonDBTemplate jsonDBTemplate = JsonDB.getInstance().getDB();
-        System.out.println("cfcfv " + jsonDBTemplate);
+        assertNotNull(jsonDBTemplate);
     }
 }

@@ -4,6 +4,7 @@ import android.net.Uri;
 import com.uci.transformer.odk.openrosa.HttpCredentials;
 import com.uci.transformer.odk.openrosa.HttpCredentialsInterface;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
@@ -16,6 +17,12 @@ import java.util.Map;
 
 @Slf4j
 public class WebCredentialsUtils {
+
+    @Value("${odk.username")
+    public String username;
+
+    @Value("${odk.password")
+    public String password;
 
     private static final Map<String, HttpCredentialsInterface> HOST_CREDENTIALS = new HashMap<>();
 
@@ -58,18 +65,18 @@ public class WebCredentialsUtils {
     }
 
     public URI getServerUrlFromPreferences() throws MalformedURLException, URISyntaxException {
-        String downloadUrl = "https://agg.staging.saksham.samagra.io";
+        String downloadUrl = System.getenv("ODK_URL");
+        log.info("ODK URL ::" + downloadUrl);
         URL url = new URL(downloadUrl);
-        URI uri = url.toURI();
-        return uri;
+        return url.toURI();
     }
 
     public String getPasswordFromPreferences() {
-        return "abcd1234";
+        return System.getenv("ODK_PASS") ;
     }
 
     public String getUserNameFromPreferences() {
-        return "test";
+        return System.getenv("ODK_USER") ;
     }
 
     /**
