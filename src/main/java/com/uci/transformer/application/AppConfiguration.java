@@ -5,6 +5,7 @@ import com.uci.adapter.cdn.FileCdnFactory;
 import com.uci.adapter.cdn.service.AzureBlobService;
 import com.uci.adapter.cdn.service.MinioClientService;
 import com.uci.adapter.cdn.service.SunbirdCloudMediaService;
+import com.uci.utils.dto.BotServiceParams;
 import io.fusionauth.client.FusionAuthClient;
 
 import org.apache.http.auth.AuthScope;
@@ -46,9 +47,9 @@ public class AppConfiguration {
 
     @Value("${campaign.url}")
     public String CAMPAIGN_URL;
-    
+
     @Value("${campaign.admin.token}")
-	public String CAMPAIGN_ADMIN_TOKEN;
+    public String CAMPAIGN_ADMIN_TOKEN;
 
     @Bean
     @Qualifier("rest")
@@ -67,7 +68,7 @@ public class AppConfiguration {
 
     @Value("${odk.password}")
     public String ODK_PASSWORD;
-    
+
     @Autowired
     public Cache<Object, Object> cache;
 
@@ -85,7 +86,7 @@ public class AppConfiguration {
     @Qualifier("custom")
     public RestTemplate getCustomTemplate() {
         RestTemplateBuilder builder = new RestTemplateBuilder();
-        Credentials credentials = new UsernamePasswordCredentials(ODK_USERNAME,ODK_PASSWORD);
+        Credentials credentials = new UsernamePasswordCredentials(ODK_USERNAME, ODK_PASSWORD);
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(AuthScope.ANY, credentials);
 
@@ -145,17 +146,17 @@ public class AppConfiguration {
     KafkaSender<Integer, String> reactiveKafkaSender(SenderOptions<Integer, String> kafkaSenderOptions) {
         return KafkaSender.create(kafkaSenderOptions);
     }
-    
+
     @Bean
-    ProducerFactory<String, String> producerFactory(){
-    	ProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory(kafkaProducerConfiguration());
-    	return producerFactory;
+    ProducerFactory<String, String> producerFactory() {
+        ProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory(kafkaProducerConfiguration());
+        return producerFactory;
     }
-    
+
     @Bean
     KafkaTemplate<String, String> kafkaTemplate() {
-    	KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory());
-    	return (KafkaTemplate<String, String>) kafkaTemplate;
+        KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory());
+        return (KafkaTemplate<String, String>) kafkaTemplate;
     }
 
     @Bean
@@ -178,8 +179,12 @@ public class AppConfiguration {
         return new SunbirdCloudMediaService();
     }
 
-//    @Bean
+    //    @Bean
 //    ReactiveProducer kafkaReactiveProducer() {
 //        return new ReactiveProducer();
 //    }
+    @Bean
+    public BotServiceParams getBotServiceParams() {
+        return new BotServiceParams();
+    }
 }
