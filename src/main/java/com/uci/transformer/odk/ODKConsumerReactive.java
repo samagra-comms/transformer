@@ -172,7 +172,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     }
                                                     long endTime = System.nanoTime();
                                                     long duration = (endTime - startTime);
-                                                    log.error("Total time spent in processing form: " + duration / 1000000);
+                                                    log.info("Total time spent in processing form: " + duration / 1000000);
                                                 } catch (JAXBException e) {
                                                     log.error("An error occured : " + e.getMessage());
                                                     e.printStackTrace();
