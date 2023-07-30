@@ -41,6 +41,14 @@ public class PostgresConfig extends AbstractR2dbcConfiguration {
     private String maxIdleTime;
     @Value("${spring.r2dbc.maxSize}")
     private String maxSize;
+    @Value("${spring.r2dbc.acquireRetry}")
+    private String acquireRetry;
+    @Value("${spring.r2dbc.maxCreateConnectionTime}")
+    private String maxCreateConnectionTime;
+    @Value("${spring.r2dbc.maxLifeTime}")
+    private String maxLifeTime;
+    @Value("${spring.r2dbc.maxAcquireTime}")
+    private String maxAcquireTime;
 
     @Override
     @Bean
@@ -64,6 +72,11 @@ public class PostgresConfig extends AbstractR2dbcConfiguration {
         ConnectionPoolConfiguration poolConfig = ConnectionPoolConfiguration.builder(connectionFactory)
                 .maxIdleTime(Duration.ofSeconds(Integer.parseInt(maxIdleTime))) // Customize the max idle time as per your needs
                 .maxSize(Integer.parseInt(maxSize))
+                .name("aggregate-pool")
+                .maxCreateConnectionTime(Duration.ofSeconds(Integer.parseInt(maxCreateConnectionTime)))
+                .acquireRetry(Integer.parseInt(acquireRetry))
+                .maxLifeTime(Duration.ofSeconds(Integer.parseInt(maxLifeTime)))
+                .maxAcquireTime(Duration.ofSeconds(Integer.parseInt(maxAcquireTime)))
                 .build();
         return new ConnectionPool(poolConfig);
     }
