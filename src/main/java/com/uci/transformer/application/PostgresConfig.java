@@ -9,6 +9,7 @@ import io.r2dbc.pool.ConnectionPoolConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
 import io.r2dbc.spi.ConnectionFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @Configuration
 @EnableR2dbcRepositories
+@Slf4j
 public class PostgresConfig extends AbstractR2dbcConfiguration {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -45,7 +47,7 @@ public class PostgresConfig extends AbstractR2dbcConfiguration {
     private String maxIdleTime;
     @Value("${spring.r2dbc.maxSize}")
     private String maxSize;
-//    @Value("${spring.r2dbc.acquireRetry}")
+    //    @Value("${spring.r2dbc.acquireRetry}")
 //    private String acquireRetry;
 //    @Value("${spring.r2dbc.maxCreateConnectionTime}")
 //    private String maxCreateConnectionTime;
@@ -67,6 +69,7 @@ public class PostgresConfig extends AbstractR2dbcConfiguration {
 //                .password(password)
 //                .database(database)
 //                .build());
+        log.info("PostgresConfig:connectionFactory:: host: " + host + " : port: " + port + " : username : " + username + " : password : " + password + " : database : " + database);
         PostgresqlConnectionConfiguration postgresConfig = PostgresqlConnectionConfiguration.builder()
                 .host(host)
                 .port(port)
