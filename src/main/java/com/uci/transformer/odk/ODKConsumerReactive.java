@@ -145,6 +145,10 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     private SurveyService surveyService;
+    @Value("${assessment-buffer-maxsize}")
+    private int assessmentBufferMaxSize;
+    @Value("${assessment-buffer-maxtime}")
+    private int assessmentBufferMaxTime;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -582,7 +586,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         @Override
                                         public void accept(Question question) {
                                             log.info("updateQuestionAndAssessment::Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
-                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
+                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
                                         }
                                     });
                         }
@@ -611,8 +615,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Mono<Question> saveQuestion(Question question) {
         return questionRepo.save(question)
                 .onErrorResume(DataIntegrityViolationException.class, ex -> {
-//                    log.error("Exception : Data integrity violation: {}", ex.getMessage());
-                    log.info("Question Data getXPath : " + question.getXPath() + "  : getFormID : " + question.getFormID() + " : getFormVersion : " + question.getFormVersion());
+                    log.info("onErrorResume::Question Data getXPath : " + question.getXPath() + "  : getFormID : " + question.getFormID() + " : getFormVersion : " + question.getFormVersion());
                     return questionRepo.findQuestionByXPathAndFormIDAndFormVersionOrderByCreatedOnDesc(question.getXPath(), question.getFormID(), question.getFormVersion())
                             .switchIfEmpty(Mono.error(ex));
                 });
@@ -622,8 +625,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                     String formID, FormManagerParams previousMeta,
                                     Transformer transformer, XMessage xMessage, Question question,
                                     String currentXPath, Boolean validResponse) {
-        if (question == null) question = existingQuestionStatus.getRight().get(0);
-
+        if (question == null) {
+            question = existingQuestionStatus.getRight().get(0);
+        }
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
         log.info("User uuid:" + userID);
 
@@ -663,13 +667,13 @@ public class ODKConsumerReactive extends TransformerProvider {
      */
     private void saveAssessmentBuffer(Assessment assessment) {
         Flux.just(assessment)
-                .bufferTimeout(1000, Duration.ofSeconds(5))
+                .bufferTimeout(assessmentBufferMaxSize, Duration.ofSeconds(assessmentBufferMaxTime))
                 .onBackpressureBuffer()
                 .flatMap(assessmentBatch -> assessmentRepo.saveAll(assessmentBatch))
                 .collectList()
                 .flatMap(assessmentList -> {
                     assessmentList.forEach(assessment1 -> {
-                        log.info(">>>> Assessment Saved Successfully {}", assessment1.getId());
+                        log.info("Assessment Saved Successfully {}", assessment1.getId());
                     });
                     return Mono.empty();
                 }).subscribe();
