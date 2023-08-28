@@ -44,6 +44,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import reactor.core.publisher.Flux;
@@ -55,6 +56,7 @@ import reactor.util.function.Tuple2;
 import javax.xml.bind.JAXBException;
 import java.io.ByteArrayInputStream;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -143,6 +145,10 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Autowired
     private SurveyService surveyService;
+    @Value("${assessment-buffer-maxsize}")
+    private int assessmentBufferMaxSize;
+    @Value("${assessment-buffer-maxtime}")
+    private int assessmentBufferMaxTime;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -563,14 +569,8 @@ public class ODKConsumerReactive extends TransformerProvider {
                     @Override
                     public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
                         if (existingQuestionStatus.getLeft()) {
-                            log.info("Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
-                            saveAssessmentData(
-                                    existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
-                                @Override
-                                public void accept(Assessment assessment) {
-                                    log.info("Assessment Saved Successfully {}", assessment.getId());
-                                }
-                            });
+                            log.info("updateQuestionAndAssessment::Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
+                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
                         } else {
                             Question saveQuestion;
                             if (prevQuestion == null) {
@@ -578,19 +578,17 @@ public class ODKConsumerReactive extends TransformerProvider {
                             } else {
                                 saveQuestion = prevQuestion;
                             }
-                            saveQuestion(saveQuestion).subscribe(new Consumer<Question>() {
-                                @Override
-                                public void accept(Question question) {
-                                    log.info("Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
-                                    saveAssessmentData(
-                                            existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse).subscribe(new Consumer<Assessment>() {
+                            saveQuestion(saveQuestion)
+                                    .doOnError(throwable -> {
+                                        log.error("Exception While Saving Question : " + throwable.getMessage());
+                                    })
+                                    .subscribe(new Consumer<Question>() {
                                         @Override
-                                        public void accept(Assessment assessment) {
-                                            log.info("Assessment Saved Successfully {}", assessment.getId());
+                                        public void accept(Question question) {
+                                            log.info("updateQuestionAndAssessment::Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
+                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
                                         }
                                     });
-                                }
-                            });
                         }
                     }
                 });
@@ -615,15 +613,21 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     private Mono<Question> saveQuestion(Question question) {
-        return questionRepo.save(question);
+        return questionRepo.save(question)
+                .onErrorResume(DataIntegrityViolationException.class, ex -> {
+                    log.info("onErrorResume::Question Data getXPath : " + question.getXPath() + "  : getFormID : " + question.getFormID() + " : getFormVersion : " + question.getFormVersion());
+                    return questionRepo.findQuestionByXPathAndFormIDAndFormVersionOrderByCreatedOnDesc(question.getXPath(), question.getFormID(), question.getFormVersion())
+                            .switchIfEmpty(Mono.error(ex));
+                });
     }
 
-    private Mono<Assessment> saveAssessmentData(Pair<Boolean, List<Question>> existingQuestionStatus,
-                                                String formID, FormManagerParams previousMeta,
-                                                Transformer transformer, XMessage xMessage, Question question,
-                                                String currentXPath, Boolean validResponse) {
-        if (question == null) question = existingQuestionStatus.getRight().get(0);
-
+    private void saveAssessmentData(Pair<Boolean, List<Question>> existingQuestionStatus,
+                                    String formID, FormManagerParams previousMeta,
+                                    Transformer transformer, XMessage xMessage, Question question,
+                                    String currentXPath, Boolean validResponse) {
+        if (question == null) {
+            question = existingQuestionStatus.getRight().get(0);
+        }
         UUID userID = xMessage.getTo().getDeviceID() != null && !xMessage.getTo().getDeviceID().isEmpty() && xMessage.getTo().getDeviceID() != "" ? UUID.fromString(xMessage.getTo().getDeviceID()) : null;
         log.info("User uuid:" + userID);
 
@@ -653,19 +657,26 @@ public class ODKConsumerReactive extends TransformerProvider {
         }
         log.info("question xpath:" + question.getXPath() + ",answer: " + assessment.getAnswer());
 
-        return assessmentRepo.save(assessment)
-                .doOnError(new Consumer<Throwable>() {
-                    @Override
-                    public void accept(Throwable throwable) {
-                        log.error(throwable.getMessage());
-                    }
-                })
-                .doOnNext(new Consumer<Assessment>() {
-                    @Override
-                    public void accept(Assessment assessment) {
-                        log.info("Assessment Saved by id: " + assessment.getId());
-                    }
-                });
+        saveAssessmentBuffer(assessment);
+    }
+
+    /**
+     * Save Assessment in batch
+     *
+     * @param assessment
+     */
+    private void saveAssessmentBuffer(Assessment assessment) {
+        Flux.just(assessment)
+                .bufferTimeout(assessmentBufferMaxSize, Duration.ofSeconds(assessmentBufferMaxTime))
+                .onBackpressureBuffer()
+                .flatMap(assessmentBatch -> assessmentRepo.saveAll(assessmentBatch))
+                .collectList()
+                .flatMap(assessmentList -> {
+                    assessmentList.forEach(assessment1 -> {
+                        log.info("Assessment Saved Successfully {}", assessment1.getId());
+                    });
+                    return Mono.empty();
+                }).subscribe();
     }
 
     private void sendEvents(XMessage xMessage, XMessagePayload questionPayload, Assessment assessment, Transformer transformer,
