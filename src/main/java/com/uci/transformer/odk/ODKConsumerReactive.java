@@ -799,13 +799,13 @@ public class ODKConsumerReactive extends TransformerProvider {
         if (isEndOfForm(response)) {
             return appendNewResponse(formID, xMessage, response)
                     .flatMap(resp -> replaceUserState(formID, xMessage, response))
-                    .flatMap(resp -> Mono.just(updateQuestionAndAssessment))
+                    .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(updateQuestionAndAssessment::subscribe)))
                     .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(() -> new UploadService().submit(response.currentResponseState, restTemplate, customRestTemplate))))
                     .flatMap(resp -> Mono.just(getClone(nextMessage)));
         } else {
             return appendNewResponse(formID, xMessage, response)
                     .flatMap(resp -> replaceUserState(formID, xMessage, response))
-                    .flatMap(resp -> Mono.just(updateQuestionAndAssessment))
+                    .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(updateQuestionAndAssessment::subscribe)))
                     .flatMap(resp -> Mono.just(getClone(nextMessage)));
         }
     }
