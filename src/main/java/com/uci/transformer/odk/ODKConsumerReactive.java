@@ -365,21 +365,12 @@ public class ODKConsumerReactive extends TransformerProvider {
                     }
 
                     // Save answerData => PreviousQuestion + CurrentAnswer
-                    Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment =
-                            updateQuestionAndAssessment(
-                                    previousMeta,
-                                    getPreviousQuestions(
-                                            previousMeta.previousPath,
-                                            formID,
-                                            response[0].formVersion),
+                    Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment = updateQuestionAndAssessment(getPreviousQuestions(
+                                    previousMeta.previousPath,
                                     formID,
-                                    transformer,
-                                    xMessage,
-                                    response[0].question,
-                                    prevQuestion,
-                                    response[0].currentIndex,
-                                    response[0].validResponse
-                            );
+                                    response[0].formVersion),
+                            response[0].question,
+                            prevQuestion);
 
 
                     /**
@@ -529,7 +520,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             return Mono.just(formManagerParams);
                         }
                     })
-                    .doOnError(e -> log.error(e.getMessage()));
+                    .doOnError(e -> log.error("Error in getPreviousMetadata:: " + e.getMessage()));
         } else {
             formManagerParams.setCurrentAnswer("");
             formManagerParams.setPreviousPath(prevPath);
@@ -560,17 +551,14 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     @NotNull
-    private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(FormManagerParams previousMeta,
-                                                                            Mono<Pair<Boolean, List<Question>>> previousQuestions, String formID,
-                                                                            Transformer transformer, XMessage xMessage, Question question, Question prevQuestion,
-                                                                            String currentXPath, Boolean validResponse) {
+    private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(Mono<Pair<Boolean, List<Question>>> previousQuestions, Question question, Question prevQuestion) {
         return previousQuestions
                 .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
                     @Override
                     public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
                         if (existingQuestionStatus.getLeft()) {
                             log.info("updateQuestionAndAssessment::Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
-                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
+//                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
                         } else {
                             Question saveQuestion;
                             if (prevQuestion == null) {
@@ -578,6 +566,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                             } else {
                                 saveQuestion = prevQuestion;
                             }
+                            log.info("updateQuestionAndAssessment::Start Saving Question : xpath : " + saveQuestion.getXPath() + " formVersion: " + saveQuestion.getFormVersion() + " formId: " + saveQuestion.getFormID());
                             saveQuestion(saveQuestion)
                                     .doOnError(throwable -> {
                                         log.error("Exception While Saving Question : " + throwable.getMessage());
@@ -586,7 +575,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                         @Override
                                         public void accept(Question question) {
                                             log.info("updateQuestionAndAssessment::Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
-                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
+//                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
                                         }
                                     });
                         }
