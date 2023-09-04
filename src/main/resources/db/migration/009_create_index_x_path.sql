@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS question_form_id_idx ON public.question (form_id,form_version,x_path);

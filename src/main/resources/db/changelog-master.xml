@@ -15,5 +15,5 @@
   <include file="db/migration/006_create_question_assessment.sql"/>
   <include file="db/migration/007_update_phoneno_type.sql"/>
   <include file="db/migration/008_update_phoneno_type.sql"/>
-
+  <include file="db/migration/009_create_index_x_path.sql"/>
 </databaseChangeLog>
