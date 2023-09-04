@@ -11,16 +11,16 @@
     </parent>
     <groupId>com.uci</groupId>
     <artifactId>transformer</artifactId>
-    <version>2.2.14</version>
+    <version>2.3.0</version>
     <name>transformer</name>
     <description>Demo project for Spring Boot</description>
 
     <properties>
         <java.version>11</java.version>
-        <utils.version>2.2.9</utils.version>
-        <dao.version>2.2.9</dao.version>
-        <adapter.version>2.2.9</adapter.version>
-        <message-rosa.version>2.2.9</message-rosa.version>
+        <utils.version>2.3.0</utils.version>
+        <dao.version>2.3.0</dao.version>
+        <adapter.version>2.3.0</adapter.version>
+        <message-rosa.version>2.3.0</message-rosa.version>
     </properties>
 
     <!-- For Downloading repositories from github packages -->
