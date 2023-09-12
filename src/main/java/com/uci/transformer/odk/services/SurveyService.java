@@ -1,11 +1,13 @@
 package com.uci.transformer.odk.services;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -30,10 +31,17 @@ public class SurveyService {
     @Value("${nlapp.userauth}")
     private String SURVEY_AUTH;
 
+    @Autowired
+    Cache<Object, Object> cache;
+
 
     public JSONObject getUserByPhoneFromFederatedServers(String hiddenFieldsStr, String phone) {
 
         String baseURL = SURVEY_URL + "?queryString=(username:\"" + phone + "\", mobilePhone: \"" + phone + "\")";
+        String cacheKey = String.format("FEDERATED USERS: SURVEY SERVICE: %s HIDDEN FIELDS: %s", baseURL, hiddenFieldsStr);
+        if (cache.getIfPresent(cacheKey) != null) {
+            return (JSONObject) cache.getIfPresent(cacheKey);
+        }
         String hiddenName = null;
         if (hiddenFieldsStr != null) {
             hiddenName = new JSONArray(hiddenFieldsStr).getJSONObject(0).get("name").toString();
@@ -66,6 +74,7 @@ public class SurveyService {
                     String value = users.getJSONObject("result").getJSONArray("users").getJSONObject(0).get(hiddenName).toString();
                     JSONObject user = new JSONObject();
                     user.put(hiddenName, value);
+                    cache.put(cacheKey, user);
                     return user;
                 } else {
                     JSONObject user = new JSONObject();
