@@ -3,6 +3,7 @@ package com.uci.transformer.odk;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.uci.adapter.cdn.FileCdnFactory;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
@@ -149,6 +150,8 @@ public class ODKConsumerReactive extends TransformerProvider {
     private int assessmentBufferMaxSize;
     @Value("${assessment-buffer-maxtime}")
     private int assessmentBufferMaxTime;
+    @Autowired
+    Cache<Object, Object> cache;
 
     @EventListener(ApplicationStartedEvent.class)
     public void onMessage() {
@@ -211,28 +214,31 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @Override
     public Mono<XMessage> transform(XMessage xMessage) {
-        XMessage[] finalXMsg = new XMessage[1];
         ArrayList<Transformer> transformers = xMessage.getTransformers();
         Transformer transformer = transformers.get(0);
 
-        log.info("1 To User ID:" + xMessage.getTo().getUserID());
         String formID = getTransformerMetaDataValue(transformer, "formID");
 
         if (formID.equals("")) {
             log.error("Unable to find form ID from Conversation Logic");
-            return null;
+            return Mono.empty();
         }
 
         log.info("current form ID:" + formID);
         String formPath = getFormPath(formID);
         log.info("current form path:" + formPath);
         if (formPath == null) {
-            return null;
+            log.error("formPath null found return null value : " + formID);
+            return Mono.empty();
         }
         isStartingMessage = xMessage.getPayload().getText() == null ? false : xMessage.getPayload().getText().equals(getTransformerMetaDataValue(transformer, "startingMessage"));
         Boolean addOtherOptions = xMessage.getProvider().equals("sunbird") ? true : false;
 
         // Get details of user from database
+        if (xMessage == null || xMessage.getTo() == null || xMessage.getTo().getUserID() == null) {
+            log.error("UserId not found in xmessage : " + xMessage);
+            return Mono.empty();
+        }
         return getPreviousMetadata(xMessage, formID)
                 .flatMap((Function<FormManagerParams, Mono<XMessage>>) previousMeta -> {
                     final ServiceResponse[] response = new ServiceResponse[1];
@@ -489,44 +495,72 @@ public class ODKConsumerReactive extends TransformerProvider {
     private Mono<FormManagerParams> getPreviousMetadata(XMessage message, String formID) {
         String prevPath = null;
         String prevXMl = null;
-        FormManagerParams formManagerParams = new FormManagerParams();
-
         if (!message.getMessageState().equals(XMessage.MessageState.OPTED_IN)) {
-            return stateRepo.findByPhoneNoAndBotFormName(message.getTo().getUserID(), formID)
-                    .defaultIfEmpty(new GupshupStateEntity())
-                    .flatMap(new Function<GupshupStateEntity, Mono<FormManagerParams>>() {
-                        @Override
-                        public Mono<FormManagerParams> apply(GupshupStateEntity stateEntity) {
-                            String prevXMl = null, prevPath = null;
-                            if (stateEntity != null && message.getPayload() != null) {
-                                prevXMl = stateEntity.getXmlPrevious();
-                                prevPath = stateEntity.getPreviousPath();
-                            }
 
-                            // Handle image responses to a question
-                            if (message.getPayload() != null) {
-                                if (message.getPayload().getMedia() != null) {
-                                    formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
-                                } else if (message.getPayload().getLocation() != null) {
-                                    formManagerParams.setCurrentAnswer(getLocationContentText(message.getPayload().getLocation()));
+            if (message != null && message.getTo() != null && message.getTo().getUserID() != null && !message.getTo().getUserID().isEmpty() && formID != null && !formID.isEmpty()) {
+                String cacheKey = String.format("get-previous-meta-data-%s-%s", message.getTo().getUserID(), formID);
+                log.info("getPreviousMetadata:: cacheKey : " + cacheKey);
+                if (cache.getIfPresent(cacheKey) != null) {
+                    GupshupStateEntity stateEntity = (GupshupStateEntity) cache.getIfPresent(cacheKey);
+                    if (stateEntity != null) {
+                        return Mono.just(prepareFormManagerParams(stateEntity, message));
+                    } else {
+                        cache.invalidate(cacheKey);
+                    }
+                }
+                log.info("getPreviousMetadata:: findByPhoneNoAndBotFormName from db...");
+                return stateRepo.findByPhoneNoAndBotFormName(message.getTo().getUserID(), formID)
+                        .defaultIfEmpty(new GupshupStateEntity())
+                        .flatMap(new Function<GupshupStateEntity, Mono<FormManagerParams>>() {
+                            @Override
+                            public Mono<FormManagerParams> apply(GupshupStateEntity stateEntity) {
+                                FormManagerParams formManagerParams = prepareFormManagerParams(stateEntity, message);
+                                if (stateEntity != null && stateEntity.getId() != null) {
+                                    log.info("getPreviousMetadata::Cache saving for this user : {} :: Data : {}", cacheKey, stateEntity);
+                                    cache.put(cacheKey, stateEntity);
                                 } else {
-                                    formManagerParams.setCurrentAnswer(message.getPayload().getText());
+                                    log.error("getPreviousMetadata:: GupshupStateEntity is null or Id not found : " + stateEntity);
                                 }
-                            } else {
-                                formManagerParams.setCurrentAnswer("");
+                                return Mono.just(formManagerParams);
                             }
-                            formManagerParams.setPreviousPath(prevPath);
-                            formManagerParams.setInstanceXMlPrevious(prevXMl);
-                            return Mono.just(formManagerParams);
-                        }
-                    })
-                    .doOnError(e -> log.error("Error in getPreviousMetadata:: " + e.getMessage()));
+                        })
+                        .doOnError(e -> log.error("Error in getPreviousMetadata:: " + e.getMessage()));
+            } else {
+                log.error("getPreviousMetadata:: Data null found UserId {} or FormId : {}", message.getTo(), formID);
+                return Mono.empty();
+            }
         } else {
+            FormManagerParams formManagerParams = new FormManagerParams();
             formManagerParams.setCurrentAnswer("");
             formManagerParams.setPreviousPath(prevPath);
             formManagerParams.setInstanceXMlPrevious(prevXMl);
             return Mono.just(formManagerParams);
         }
+    }
+
+    private FormManagerParams prepareFormManagerParams(GupshupStateEntity stateEntity, XMessage message) {
+        FormManagerParams formManagerParams = new FormManagerParams();
+        String prevXMl = null, prevPath = null;
+        if (stateEntity != null && message.getPayload() != null) {
+            prevXMl = stateEntity.getXmlPrevious();
+            prevPath = stateEntity.getPreviousPath();
+        }
+
+        // Handle image responses to a question
+        if (message.getPayload() != null) {
+            if (message.getPayload().getMedia() != null) {
+                formManagerParams.setCurrentAnswer(message.getPayload().getMedia().getUrl());
+            } else if (message.getPayload().getLocation() != null) {
+                formManagerParams.setCurrentAnswer(getLocationContentText(message.getPayload().getLocation()));
+            } else {
+                formManagerParams.setCurrentAnswer(message.getPayload().getText());
+            }
+        } else {
+            formManagerParams.setCurrentAnswer("");
+        }
+        formManagerParams.setPreviousPath(prevPath);
+        formManagerParams.setInstanceXMlPrevious(prevXMl);
+        return formManagerParams;
     }
 
     /**
@@ -866,27 +900,61 @@ public class ODKConsumerReactive extends TransformerProvider {
     }
 
     private Mono<GupshupStateEntity> replaceUserState(String formID, XMessage xMessage, ServiceResponse response) {
-        log.info("Saving State");
+        log.info("replaceUserState:: Saving State : ");
+        String cacheKey = String.format("get-previous-meta-data-%s-%s", xMessage.getTo().getUserID(), formID);
+        log.info("replaceUserState:: cacheKey : " + cacheKey);
+        if (cache.getIfPresent(cacheKey) != null) {
+            GupshupStateEntity saveEntity = (GupshupStateEntity) cache.getIfPresent(cacheKey);
+            if (saveEntity != null) {
+                saveEntity.setPhoneNo(xMessage.getTo().getUserID());
+                saveEntity.setPreviousPath(response.getCurrentIndex());
+                saveEntity.setXmlPrevious(response.getCurrentResponseState());
+                saveEntity.setBotFormName(formID);
+                return stateRepo.save(saveEntity)
+                        .doOnError(new Consumer<Throwable>() {
+                            @Override
+                            public void accept(Throwable throwable) {
+                                log.error("replaceUserState::Cache:Unable to persist state entity {}", throwable.getMessage());
+                            }
+                        }).doOnNext(new Consumer<GupshupStateEntity>() {
+                            @Override
+                            public void accept(GupshupStateEntity gupshupStateEntity) {
+                                log.info("replaceUserState::Cache:Successfully persisted state entity : Phone No : {} , Form Id : {} , StateId : {}", gupshupStateEntity.getPhoneNo(), formID, gupshupStateEntity.getId());
+                            }
+                        });
+            } else {
+                log.error("replaceUserState:: Cache invalidate :: " + saveEntity);
+                cache.invalidate(cacheKey);
+            }
+        }
+        log.info("replaceUserState:: findByPhoneNoAndBotFormName from db...");
+
         return stateRepo.findByPhoneNoAndBotFormName(xMessage.getTo().getUserID(), formID)
                 .defaultIfEmpty(new GupshupStateEntity())
                 .map(new Function<GupshupStateEntity, Mono<GupshupStateEntity>>() {
                     @Override
                     public Mono<GupshupStateEntity> apply(GupshupStateEntity saveEntity) {
-                        log.info("Saving the ", xMessage.getTo().getUserID());
+                        log.info("replaceUserState:: Saving the Message State : ", xMessage.getTo().getUserID());
                         saveEntity.setPhoneNo(xMessage.getTo().getUserID());
                         saveEntity.setPreviousPath(response.getCurrentIndex());
                         saveEntity.setXmlPrevious(response.getCurrentResponseState());
                         saveEntity.setBotFormName(formID);
+                        if (saveEntity != null && saveEntity.getId() != null) {
+                            log.info("replaceUserState::Cache saving for this user : {} :: Data : {}", cacheKey, saveEntity);
+                            cache.put(cacheKey, saveEntity);
+                        } else {
+                            log.error("replaceUserState:: GupshupStateEntity is null or Id not found : " + saveEntity);
+                        }
                         return stateRepo.save(saveEntity)
                                 .doOnError(new Consumer<Throwable>() {
                                     @Override
                                     public void accept(Throwable throwable) {
-                                        log.error("Unable to persist state entity {}", throwable.getMessage());
+                                        log.error("replaceUserState::Unable to persist state entity {}", throwable.getMessage());
                                     }
                                 }).doOnNext(new Consumer<GupshupStateEntity>() {
                                     @Override
                                     public void accept(GupshupStateEntity gupshupStateEntity) {
-                                        log.info("Successfully persisted state entity");
+                                        log.info("replaceUserState::Successfully persisted state entity : Phone No : {} , Form Id : {} ", gupshupStateEntity.getPhoneNo(), formID);
                                     }
                                 });
                     }
