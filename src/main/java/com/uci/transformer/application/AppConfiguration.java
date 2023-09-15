@@ -25,9 +25,8 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.web.client.RestTemplate;
 import reactor.core.publisher.Flux;
@@ -106,8 +105,9 @@ public class AppConfiguration {
         Map<String, Object> configuration = new HashMap<>();
         configuration.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         configuration.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID);
-        configuration.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
-        configuration.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
+        configuration.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        configuration.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonDeserializer.class);
+        configuration.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonDeserializer.class);
         configuration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         return configuration;
     }
@@ -125,11 +125,24 @@ public class AppConfiguration {
     }
 
     @Bean
-    ReceiverOptions<String, String> kafkaReceiverOptions(@Value("${odk-topic-pattern}") String[] inTopicName) {
+    ReceiverOptions<String, String> kafkaReceiverOptions(@Value("${odk-transformer}") String inTopicName) {
         ReceiverOptions<String, String> options = ReceiverOptions.create(kafkaConsumerConfiguration());
-        return options.subscription(Pattern.compile(inTopicName[0]))
+        return options.subscription(Pattern.compile(inTopicName))
                 .withKeyDeserializer(new JsonDeserializer<>())
                 .withValueDeserializer(new JsonDeserializer(String.class));
+    }
+
+    @Bean
+    ConsumerFactory<String, String> consumerFactory() {
+        DefaultKafkaConsumerFactory defaultKafkaConsumerFactory = new DefaultKafkaConsumerFactory<>(kafkaConsumerConfiguration(), new JsonDeserializer<>(), new JsonDeserializer<>());
+        return defaultKafkaConsumerFactory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory());
+        return factory;
     }
 
     @Bean
