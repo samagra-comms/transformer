@@ -500,6 +500,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 log.info("getPreviousMetadata:: cacheKey : " + cacheKey);
                 if (redisCacheService.isKeyExists(cacheKey)) {
                     GupshupStateEntity stateEntity = (GupshupStateEntity) redisCacheService.getCache(cacheKey);
+                    log.info("getPreviousMetadata:: Getting findByPhoneNoAndBotFormName from cache : " + stateEntity);
                     if (stateEntity != null) {
                         return Mono.just(prepareFormManagerParams(stateEntity, message));
                     }
@@ -905,6 +906,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         log.info("replaceUserState:: cacheKey : " + cacheKey);
         if (redisCacheService.isKeyExists(cacheKey)) {
             GupshupStateEntity saveEntity = (GupshupStateEntity) redisCacheService.getCache(cacheKey);
+            log.info("replaceUserState:: Getting findByPhoneNoAndBotFormName from cache : " + saveEntity);
             if (saveEntity != null) {
                 saveEntity.setPhoneNo(xMessage.getTo().getUserID());
                 saveEntity.setPreviousPath(response.getCurrentIndex());
