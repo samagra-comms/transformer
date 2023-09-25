@@ -3,7 +3,6 @@ package com.uci.transformer.odk;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.github.benmanes.caffeine.cache.Cache;
 import com.uci.adapter.cdn.FileCdnFactory;
 import com.uci.dao.models.XMessageDAO;
 import com.uci.dao.repository.XMessageRepository;
@@ -501,8 +500,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                 if (redisCacheService.isKeyExists(cacheKey)) {
                     GupshupStateEntity stateEntity = (GupshupStateEntity) redisCacheService.getCache(cacheKey);
                     log.info("getPreviousMetadata:: Getting findByPhoneNoAndBotFormName from cache : " + stateEntity);
-                    if (stateEntity != null) {
+                    if (stateEntity != null && stateEntity.getId() != null) {
                         return Mono.just(prepareFormManagerParams(stateEntity, message));
+                    } else {
+                        log.error("getPreviousMetadata:: MessageState object is null found  : " + stateEntity);
+                        redisCacheService.deleteCache(cacheKey);
                     }
                 }
                 log.info("getPreviousMetadata:: findByPhoneNoAndBotFormName from db...UserId : {}, FormId : {}", message.getTo().getUserID(), formID);
@@ -511,11 +513,11 @@ public class ODKConsumerReactive extends TransformerProvider {
                         .flatMap(new Function<GupshupStateEntity, Mono<FormManagerParams>>() {
                             @Override
                             public Mono<FormManagerParams> apply(GupshupStateEntity stateEntity) {
-                                if (stateEntity != null) {
-                                    log.info("getPreviousMetadata::Received data from DB : ID {}, Phone {} ", stateEntity.getId(), stateEntity.getPhoneNo());
+                                log.info("getPreviousMetadata:: Getting MessageState data from db : " + stateEntity);
+                                if (stateEntity != null && stateEntity.getId() != null && stateEntity.getPreviousPath() != null && stateEntity.getXmlPrevious() != null && stateEntity.getPhoneNo() != null && stateEntity.getBotFormName() != null) {
                                     redisCacheService.setCache(cacheKey, stateEntity);
                                 } else {
-                                    log.error("getPreviousMetadata:: GupshupStateEntity is null or Id not found : " + stateEntity);
+                                    log.error("getPreviousMetadata:: MessageState Data is null found : " + stateEntity);
                                 }
                                 FormManagerParams formManagerParams = prepareFormManagerParams(stateEntity, message);
                                 return Mono.just(formManagerParams);
@@ -901,18 +903,17 @@ public class ODKConsumerReactive extends TransformerProvider {
             log.error("replaceUserState:UserId or FormId is null/empty found : userid : " + xMessage.getTo() + " :::: formId : " + formID);
             return Mono.empty();
         }
-//        log.info("replaceUserState:: Saving State : UserId: {} , formId : {} ", xMessage.getTo().getUserID(), formID);
         String cacheKey = String.format("get-previous-meta-data-%s-%s", xMessage.getTo().getUserID(), formID);
         log.info("replaceUserState:: cacheKey : " + cacheKey);
         if (redisCacheService.isKeyExists(cacheKey)) {
             GupshupStateEntity saveEntity = (GupshupStateEntity) redisCacheService.getCache(cacheKey);
             log.info("replaceUserState:: Getting findByPhoneNoAndBotFormName from cache : " + saveEntity);
-            if (saveEntity != null) {
+            if (saveEntity != null && saveEntity.getId() != null) {
                 saveEntity.setPhoneNo(xMessage.getTo().getUserID());
                 saveEntity.setPreviousPath(response.getCurrentIndex());
                 saveEntity.setXmlPrevious(response.getCurrentResponseState());
                 saveEntity.setBotFormName(formID);
-                log.info("replaceUserState: Getting data from cache : " + saveEntity);
+                log.info("replaceUserState: Setting data to cache : " + saveEntity);
                 redisCacheService.setCache(cacheKey, saveEntity);
                 return stateRepo.save(saveEntity)
                         .doOnError(new Consumer<Throwable>() {
@@ -926,6 +927,9 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 log.info("replaceUserState::Cache:Successfully persisted state entity : Phone No : {} , Form Id : {} , StateId : {}", gupshupStateEntity.getPhoneNo(), formID, gupshupStateEntity.getId());
                             }
                         });
+            } else {
+                log.error("replaceUserState:: Message state null or message state Id not found  : " + saveEntity);
+                redisCacheService.deleteCache(cacheKey);
             }
         }
         log.info("replaceUserState:: findByPhoneNoAndBotFormName from db...");
@@ -935,15 +939,16 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .map(new Function<GupshupStateEntity, Mono<GupshupStateEntity>>() {
                     @Override
                     public Mono<GupshupStateEntity> apply(GupshupStateEntity saveEntity) {
+                        log.info("replaceUserState:: Getting MessageState data from db : " + saveEntity);
                         saveEntity.setPhoneNo(xMessage.getTo().getUserID());
                         saveEntity.setPreviousPath(response.getCurrentIndex());
                         saveEntity.setXmlPrevious(response.getCurrentResponseState());
                         saveEntity.setBotFormName(formID);
-                        if (saveEntity != null) {
-                            log.info("replaceUserState::Received data from DB : ID {}, Phone {} ", saveEntity.getId(), saveEntity.getPhoneNo());
+                        if (saveEntity != null && saveEntity.getId() != null && saveEntity.getPreviousPath() != null && saveEntity.getXmlPrevious() != null && saveEntity.getPhoneNo() != null && saveEntity.getBotFormName() != null) {
+                            log.info("replaceUserState::Setting MessageState Data in Cache : {} ", saveEntity);
                             redisCacheService.setCache(cacheKey, saveEntity);
                         } else {
-                            log.error("replaceUserState:: GupshupStateEntity is null or Id not found : " + saveEntity);
+                            log.error("replaceUserState:: MessageState Data is null found : " + saveEntity);
                         }
                         return stateRepo.save(saveEntity)
                                 .doOnError(new Consumer<Throwable>() {
