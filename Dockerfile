@@ -37,5 +37,6 @@ COPY --from=build $HOME/target/*.jar app.jar
 EXPOSE 8080
 
 #ENTRYPOINT ["java","-Xmx4096m","-Xshareclasses","-XX:+CMSClassUnloadingEnabled","-XX:+UseG1GC","-XX:+ExplicitGCInvokesConcurrent", "-XX:MaxDirectMemorySize=4g","-jar","app.jar"]
-ENTRYPOINT ["java","-Xshareclasses","-XX:+CMSClassUnloadingEnabled","-XX:+UseG1GC","-XX:+ExplicitGCInvokesConcurrent","-XX:MaxGCPauseMillis=1000", "-XX:MetaspaceSize=256m", "-XX:MaxMetaspaceSize=256m", "-Dio.netty.maxDirectMemory=0","-Dio.netty.noPreferDirect=false","-XX:MaxDirectMemorySize=4098m","-jar","app.jar"]
+#ENTRYPOINT ["java","-Xshareclasses","-XX:+CMSClassUnloadingEnabled","-XX:+UseG1GC","-XX:+ExplicitGCInvokesConcurrent","-XX:MaxGCPauseMillis=1000", "-XX:MetaspaceSize=256m", "-XX:MaxMetaspaceSize=256m", "-Dio.netty.maxDirectMemory=0","-Dio.netty.noPreferDirect=false","-XX:MaxDirectMemorySize=4098m","-jar","app.jar"]
+ENTRYPOINT ["java","-jar","app.jar"]
 
