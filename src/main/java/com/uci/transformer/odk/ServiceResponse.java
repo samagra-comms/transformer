@@ -1,5 +1,6 @@
 package com.uci.transformer.odk;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Map;
 
@@ -8,7 +9,7 @@ import org.javarosa.core.model.FormIndex;
 import com.uci.transformer.odk.entity.Question;
 import messagerosa.core.model.XMessagePayload;
 
-public class ServiceResponse {
+public class ServiceResponse implements Serializable {
     String currentIndex;
     XMessagePayload nextMessage; // Next question message
     String currentResponseState;

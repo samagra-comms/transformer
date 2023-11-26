@@ -17,7 +17,7 @@
 
     <properties>
         <java.version>11</java.version>
-        <utils.version>2.3.0</utils.version>
+        <utils.version>2.4.0</utils.version>
         <dao.version>2.3.0</dao.version>
         <adapter.version>2.3.0</adapter.version>
         <message-rosa.version>2.3.0</message-rosa.version>

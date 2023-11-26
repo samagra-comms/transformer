@@ -35,6 +35,7 @@ import messagerosa.core.model.XMessage;
 import messagerosa.core.model.XMessage.MessageState;
 import messagerosa.core.model.XMessagePayload;
 import messagerosa.xml.XMessageParser;
+import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -54,7 +55,11 @@ import reactor.kafka.receiver.ReceiverRecord;
 import reactor.util.function.Tuple2;
 
 import javax.xml.bind.JAXBException;
-import java.io.ByteArrayInputStream;
+import java.io.*;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -63,6 +68,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -127,7 +134,7 @@ public class ODKConsumerReactive extends TransformerProvider {
     @Value("${assesment.character.go_to_start}")
     public String assesGoToStartChar;
 
-    public MenuManager menuManager;
+    public UniLingualMenuManager menuManager;
 
     public Boolean isStartingMessage;
 
@@ -178,7 +185,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                                                     kafkaProducer.send(genericTransformer, transformedMessage.toXML());
 
                                                 } else {
-                                                    log.info("CP-05" + transformedMessage.toXML());
+                                                    log.info("CP-05");
                                                     kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
                                                 }
                                             } catch (JAXBException e) {
@@ -239,7 +246,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         return getPreviousMetadata(xMessage, formID)
                 .flatMap((Function<FormManagerParams, Mono<XMessage>>) previousMeta -> {
                     final ServiceResponse[] response = new ServiceResponse[1];
-                    MenuManager mm;
+                    UniLingualMenuManager mm;
                     ObjectMapper mapper = new ObjectMapper();
                     JSONObject camp = null; //  is not being used in menumanager, only being added in constructor
                     // Remove camp from MenuManager construction
@@ -266,12 +273,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                     }
 
                     log.info("Federated User by phone : " + user);
-//                        try {
-//                            camp = new JSONObject(mapper.writeValueAsString(campaign));
-//                        } catch (JsonProcessingException e) {
-//                            e.printStackTrace();
-//                        }
-//                        String hiddenFieldsStr = getTransformerMetaDataValue(transformer, "hiddenFields");
+
                     ArrayNode hiddenFields = null;
                     try {
                         hiddenFields = (ArrayNode) mapper.readTree(hiddenFieldsStr);
@@ -290,157 +292,123 @@ public class ODKConsumerReactive extends TransformerProvider {
                             xMessage.setSessionId(BotUtil.newConversationSessionId());
                         }
                         previousMeta.currentAnswer = assesGoToStartChar;
-                        ServiceResponse serviceResponse = new MenuManager(null,
+                        ServiceResponse serviceResponse = new UniLingualMenuManager(null,
                                 null, null, formPath, formID, false,
-                                questionRepo, redisCacheService, xMessage.getTo().getUserID(), xMessage.getApp(), null).start();
+                                questionRepo, xMessage.getApp(), null).start();
+                        instanceXMlPrevious = serviceResponse.currentResponseState;
+                        Pattern pattern = Pattern.compile("<meta>(.*?)</meta>");
+                        Matcher matcher = pattern.matcher(instanceXMlPrevious);
+                        String instanceId = "";
+                        if (matcher.find()) {
+                            instanceId = matcher.group(1);
+                        }
+                        String cacheKey = String.format("%s_%s_%s", md5sum(instanceXMlPrevious.replaceAll("<meta>(.*?)</meta>", "")), formID, xMessage.getPayload());
+                        mm = new UniLingualMenuManager(null, null, instanceXMlPrevious,
+                                formPath, formID, xMessage.getApp(), xMessage.getPayload(),
+                                fileCdnFactory.getFileCdnProvider());
+                        if (redisCacheService.isKeyExists(cacheKey)) {
+                            try {
+                                response[0] = (ServiceResponse) new ObjectInputStream(new ByteArrayInputStream(((String) redisCacheService.getCache(cacheKey)).getBytes(StandardCharsets.ISO_8859_1))).readObject();
+                            } catch (IOException | ClassNotFoundException e) {
+                                log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
+                                        + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID);
+                                response[0] = mm.start();
+                                try {
+                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                    ObjectOutputStream oos = new ObjectOutputStream(baos);
+                                    oos.writeObject(response[0]);
+                                    redisCacheService.setCache(cacheKey, baos.toString(StandardCharsets.ISO_8859_1));
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                        }
+                        else {
+                            log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
+                                    + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID);
+                            response[0] = mm.start();
+                            try {
+                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                ObjectOutputStream oos = new ObjectOutputStream(baos);
+                                oos.writeObject(response[0]);
+                                redisCacheService.setCache(cacheKey, baos.toString(StandardCharsets.ISO_8859_1));
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
                         FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
-                        ss.parse(serviceResponse.currentResponseState);
+                        ss.parse(response[0].currentResponseState);
                         ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
                         ss.updateParams("phone_number", xMessage.getTo().getUserID());
-                        instanceXMlPrevious = ss.updateHiddenFields(hiddenFields, (JSONObject) user).getXML();
-                        prefilled = false;
-                        answer = null;
-                        log.info("Condition 1 - xpath: null, answer: null, instanceXMlPrevious: "
-                                + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID);
-                        mm = new MenuManager(null, null, instanceXMlPrevious,
-                                formPath, formID, redisCacheService,
-                                xMessage.getTo().getUserID(), xMessage.getApp(), xMessage.getPayload(),
-                                fileCdnFactory.getFileCdnProvider());
-                        response[0] = mm.start();
+                        response[0].currentResponseState = ss.updateHiddenFields(hiddenFields, user).getXML();
+                        response[0].currentResponseState = response[0].currentResponseState.replaceAll("<meta>(.*?)</meta>", String.format("<meta>%s</meta>", instanceId));
+                        response[0].currentResponseState = response[0].currentResponseState.replace("<data>", String.format("<data id=\"%s\">", formID));
                     } else {
+                        prefilled = false;
+                        answer = previousMeta.currentAnswer;
+                        instanceXMlPrevious = previousMeta.instanceXMlPrevious;
                         FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
-                        if (previousMeta.previousPath.equals("question./data/group_matched_vacancies[1]/initial_interest[1]")) {
-                            ss.parse(previousMeta.instanceXMlPrevious);
-                            ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-
-                            JSONObject vacancyDetails = null;
-                            for (int j = 0; j < user.getJSONArray("matched").length(); j++) {
-                                String vacancyID = String.valueOf(user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail").getInt("id"));
-                                if (previousMeta.currentAnswer.equals(vacancyID)) {
-                                    vacancyDetails = user.getJSONArray("matched").getJSONObject(j).getJSONObject("vacancy_detail");
-                                }
-                            }
-                            ss.updateHiddenFields(hiddenFields, user);
-                            int idToBeDeleted = -1;
-                            for (int i = 0; i < hiddenFields.size(); i++) {
-                                JsonNode object = hiddenFields.get(i);
-                                String userField = object.findValue("name").asText();
-                                if (userField.equals("candidate_id")) {
-                                    idToBeDeleted = i;
-                                }
-                            }
-                            if (idToBeDeleted > -1) hiddenFields.remove(idToBeDeleted);
-                            instanceXMlPrevious = instanceXMlPrevious + ss.updateHiddenFields(hiddenFields, (JSONObject) vacancyDetails).getXML();
-                            prefilled = false;
-                            answer = previousMeta.currentAnswer;
-                            log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
-                                    + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
-                                    + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
-                            mm = new MenuManager(previousMeta.previousPath, answer,
-                                    instanceXMlPrevious, formPath, formID,
-                                    prefilled, questionRepo, user, true,
-                                    redisCacheService, xMessage, fileCdnFactory.getFileCdnProvider());
-                        } else {
-                            prefilled = false;
-                            answer = previousMeta.currentAnswer;
-                            instanceXMlPrevious = previousMeta.instanceXMlPrevious;
-                            log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
-                                    + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
-                                    + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
-                            mm = new MenuManager(previousMeta.previousPath, answer,
-                                    instanceXMlPrevious, formPath, formID,
-                                    prefilled, questionRepo, user, true, redisCacheService,
-                                    xMessage, fileCdnFactory.getFileCdnProvider());
+                        ss.parse(instanceXMlPrevious);
+                        ss.deleteHiddenFields(hiddenFields);
+                        Pattern pattern = Pattern.compile("<meta>(.*?)</meta>");
+                        Matcher matcher = pattern.matcher(instanceXMlPrevious);
+                        String instanceId = "";
+                        if (matcher.find()) {
+                            instanceId = matcher.group(1);
                         }
-                        response[0] = mm.start();
+                        String cacheKey = String.format("%s_%s_%s", md5sum(ss.getXML().replaceAll("<meta>(.*?)</meta>", "")), formID, xMessage.getPayload());
+                        mm = new UniLingualMenuManager(previousMeta.previousPath, answer,
+                                instanceXMlPrevious, formPath, formID,
+                                prefilled, questionRepo, user, true,
+                                xMessage, fileCdnFactory.getFileCdnProvider());
+                        if (redisCacheService.isKeyExists(cacheKey)) {
+                            try {
+                                response[0] = (ServiceResponse) new ObjectInputStream(new ByteArrayInputStream(((String) redisCacheService.getCache(cacheKey)).getBytes(StandardCharsets.ISO_8859_1))).readObject();
+                            } catch (IOException | ClassNotFoundException e) {
+                                log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
+                                        + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
+                                        + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
+                                response[0] = mm.start();
+                                try {
+                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                    ObjectOutputStream oos = new ObjectOutputStream(baos);
+                                    oos.writeObject(response[0]);
+                                    redisCacheService.setCache(cacheKey, baos.toString(StandardCharsets.ISO_8859_1));
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                        }
+                        else {
+                            log.info("Condition 1 - xpath: " + previousMeta.previousPath + ", answer: " + answer + ", instanceXMlPrevious: "
+                                    + instanceXMlPrevious + ", formPath: " + formPath + ", formID: " + formID + ", prefilled: " + prefilled
+                                    + ", questionRepo: " + questionRepo + ", user: " + user + ", shouldUpdateFormXML: true, campaign: " + camp);
+                            response[0] = mm.start();
+                            try {
+                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                ObjectOutputStream oos = new ObjectOutputStream(baos);
+                                oos.writeObject(response[0]);
+                                redisCacheService.setCache(cacheKey, baos.toString(StandardCharsets.ISO_8859_1));
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        ss = FormInstanceUpdation.builder().build();
+                        ss.parse(response[0].currentResponseState);
+                        ss.updateHiddenFields(hiddenFields, user);
+                        response[0].currentResponseState = ss.getXML();
+                        response[0].currentResponseState = response[0].currentResponseState.replaceAll("<meta>(.*?)</meta>", String.format("<meta>%s</meta>", instanceId));
+                        response[0].currentResponseState = response[0].currentResponseState.replace("<data>", String.format("<data id=\"%s\">", formID));
                     }
 
                     log.info("next question xpath:" + response[0].question.getXPath());
 
-                    /* To use with previous question & question payload methods */
-//                                            log.info("menu manager instanceXMlPrevious: "+instanceXMlPrevious);
-                    menuManager = mm;
-
-                    /* Previous Question Data */
-                    Question prevQuestion = null;
-                    if (!isStartingMessage) {
-                        prevQuestion = menuManager.getQuestionFromXPath(previousMeta.previousPath);
-                    }
-
-                    // Save answerData => PreviousQuestion + CurrentAnswer
-                    Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment = updateQuestionAndAssessment(getPreviousQuestions(
-                                    previousMeta.previousPath,
-                                    formID,
-                                    response[0].formVersion),
-                            response[0].question,
-                            prevQuestion);
-
-
-                    /**
-                     *  This is for doubtnut hop bot hardcode
-                     **/
-                    if (response[0].currentIndex.contains("eof__") && response[0].currentIndex.contains("doubtnut")) {
-                        String nextBotID = mm.getNextBotID(response[0].currentIndex);
-                        return botService.getBotNodeFromId(nextBotID).map(new Function<JsonNode, Mono<XMessage>>() {
-                            @Override
-                            public Mono<XMessage> apply(JsonNode data) {
-//                                    JsonNode data = jsonNode.get("data");
-                                ArrayList<Transformer> transformers1 = new ArrayList<Transformer>();
-                                ArrayList transformerList = (ArrayList) data.findValues("transformers");
-
-                                transformerList.forEach(transformerTmp -> {
-                                    JsonNode transformerNode = (JsonNode) transformerTmp;
-                                    int i = 0;
-                                    while (transformerNode.get(i) != null) {
-                                        JsonNode transformer1 = transformerNode.get(i);
-                                        log.info("transformer:" + transformer1);
-
-                                        HashMap<String, String> metaData = new HashMap<String, String>();
-                                        if (data.findValue("ownerID").asText().equals("null")) {
-                                            metaData.put("botOwnerID", "");
-                                        } else {
-                                            metaData.put("botOwnerID", data.findValue("ownerID").asText());
-                                        }
-                                        if (data.findValue("ownerOrgID").asText().equals("null")) {
-                                            metaData.put("botOwnerOrgID", "");
-                                        } else {
-                                            metaData.put("botOwnerOrgID", data.findValue("ownerOrgID").asText());
-                                        }
-                                        metaData.put("startingMessage", data.findValue("startingMessage").asText());
-                                        metaData.put("type", "generic");
-
-                                        Transformer transf = new Transformer();
-                                        transf.setId(transformer1.get("id").asText());
-                                        transf.setMetaData(metaData);
-                                        transformers1.add(transf);
-                                        i++;
-                                    }
-                                });
-                                xMessage.setTransformers(transformers1);
-                                XMessagePayload payload = xMessage.getPayload();
-                                payload.setText(data.path("startingMessage").asText());
-                                xMessage.setPayload(payload);
-                                xMessage.setApp(data.path("name").asText());
-                                if (data.findValue("ownerID") != null && !data.findValue("ownerID").asText().equals("null")) {
-                                    xMessage.setOwnerId(data.findValue("ownerID").asText());
-                                } else {
-                                    xMessage.setOwnerId("");
-                                }
-                                if (data.findValue("ownerOrgID") != null && !data.findValue("ownerOrgID").asText().equals("null")) {
-                                    xMessage.setOwnerOrgId(data.findValue("ownerOrgID").asText());
-                                } else {
-                                    xMessage.setOwnerOrgId("");
-                                }
-                                xMessage.setBotId(UUID.fromString(data.path("id").asText()));
-                                xMessage.setSessionId(UUID.randomUUID());
-                                return Mono.just(xMessage);
-                            }
-                        }).block();
-                    }
                     /* If form contains eof__, then process next bot by id addded with eof__bot_id, else process message */
-                    else if (response[0].currentIndex.contains("eof__")) {
+                    if (response[0].currentIndex.contains("eof__")) {
                         String nextBotID = mm.getNextBotID(response[0].currentIndex);
 
+                        ArrayNode finalHiddenFields = hiddenFields;
+                        JSONObject finalUser = user;
                         return Mono.zip(
                                 botService.getBotNameByBotID(nextBotID),
                                 botService.getFirstFormByBotID(nextBotID)
@@ -450,30 +418,32 @@ public class ODKConsumerReactive extends TransformerProvider {
                                 String nextFormID = objects.getT2();
                                 String nextAppName = objects.getT1();
 
-                                ServiceResponse serviceResponse = new MenuManager(
+                                ServiceResponse serviceResponse = new UniLingualMenuManager(
                                         null, null, null,
                                         getFormPath(nextFormID), nextFormID,
-                                        false, questionRepo, redisCacheService,
-                                        xMessage.getTo().getUserID(), xMessage.getApp(), null)
+                                        false, questionRepo, xMessage.getApp(), null)
                                         .start();
                                 FormInstanceUpdation ss = FormInstanceUpdation.builder().build();
                                 ss.parse(serviceResponse.currentResponseState);
                                 ss.updateAdapterProperties(xMessage.getChannel(), xMessage.getProvider());
-//                                                        String instanceXMlPrevious = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-//                                                                ss.getXML();
+                                ss.deleteHiddenFields(finalHiddenFields);
                                 String instanceXMlPrevious = ss.getXML();
                                 log.debug("Instance value >> " + instanceXMlPrevious);
-                                MenuManager mm2 = new MenuManager(null, null,
+                                UniLingualMenuManager mm2 = new UniLingualMenuManager(null, null,
                                         instanceXMlPrevious, getFormPath(nextFormID), nextFormID, true,
-                                        questionRepo, redisCacheService,
-                                        xMessage.getTo().getUserID(), xMessage.getApp(), null);
+                                        questionRepo, xMessage.getApp(), null);
                                 ServiceResponse response = mm2.start();
+                                ss = FormInstanceUpdation.builder().build();
+                                ss.parse(response.currentResponseState);
+                                ss.updateHiddenFields(finalHiddenFields, finalUser);
+                                response.currentResponseState = ss.getXML();
+                                response.currentResponseState = response.currentResponseState.replace("<data>", String.format("<data id=\"%s\">", formID));
                                 xMessage.setApp(nextAppName);
-                                return decodeXMessage(xMessage, response, nextFormID, updateQuestionAndAssessment);
+                                return decodeXMessage(xMessage, response, nextFormID);
                             }
                         });
                     } else {
-                        return decodeXMessage(xMessage, response[0], formID, updateQuestionAndAssessment);
+                        return decodeXMessage(xMessage, response[0], formID);
                     }
                 });
     }
@@ -585,53 +555,57 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     @NotNull
     private Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment(Mono<Pair<Boolean, List<Question>>> previousQuestions, Question question, Question prevQuestion) {
-        return previousQuestions
-                .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
-                    @Override
-                    public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
-                        if (existingQuestionStatus.getLeft()) {
-                            log.info("updateQuestionAndAssessment::Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
-//                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
-                        } else {
-                            Question saveQuestion;
-                            if (prevQuestion == null) {
-                                saveQuestion = question;
-                            } else {
-                                saveQuestion = prevQuestion;
-                            }
-                            log.info("updateQuestionAndAssessment::Start Saving Question : xpath : " + saveQuestion.getXPath() + " formVersion: " + saveQuestion.getFormVersion() + " formId: " + saveQuestion.getFormID());
-                            saveQuestion(saveQuestion)
-                                    .doOnError(throwable -> {
-                                        log.error("Exception While Saving Question : " + throwable.getMessage());
-                                    })
-                                    .subscribe(new Consumer<Question>() {
-                                        @Override
-                                        public void accept(Question question) {
-                                            log.info("updateQuestionAndAssessment::Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
-//                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
-                                        }
-                                    });
-                        }
-                    }
-                });
+        // Removed due to redundancy
+        return Mono.empty();
+//        return previousQuestions
+//                .doOnNext(new Consumer<Pair<Boolean, List<Question>>>() {
+//                    @Override
+//                    public void accept(Pair<Boolean, List<Question>> existingQuestionStatus) {
+//                        if (existingQuestionStatus.getLeft()) {
+//                            log.info("updateQuestionAndAssessment::Found Question id: " + existingQuestionStatus.getRight().get(0).getId() + ", xPath: " + existingQuestionStatus.getRight().get(0).getXPath());
+////                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, null, currentXPath, validResponse);
+//                        } else {
+//                            Question saveQuestion;
+//                            if (prevQuestion == null) {
+//                                saveQuestion = question;
+//                            } else {
+//                                saveQuestion = prevQuestion;
+//                            }
+//                            log.info("updateQuestionAndAssessment::Start Saving Question : xpath : " + saveQuestion.getXPath() + " formVersion: " + saveQuestion.getFormVersion() + " formId: " + saveQuestion.getFormID());
+//                            saveQuestion(saveQuestion)
+//                                    .doOnError(throwable -> {
+//                                        log.error("Exception While Saving Question : " + throwable.getMessage());
+//                                    })
+//                                    .subscribe(new Consumer<Question>() {
+//                                        @Override
+//                                        public void accept(Question question) {
+//                                            log.info("updateQuestionAndAssessment::Question Saved Successfully, id: " + question.getId() + ", xPath: " + question.getXPath());
+////                                            saveAssessmentData(existingQuestionStatus, formID, previousMeta, transformer, xMessage, question, currentXPath, validResponse);
+//                                        }
+//                                    });
+//                        }
+//                    }
+//                });
     }
 
     private Mono<Pair<Boolean, List<Question>>> getPreviousQuestions(String previousPath, String formID, String formVersion) {
-        log.info("ODKConsumerReactive:getPreviousQuestions:: previousPath: " + previousPath + " :: formId: " + formID + " :: formVersion:" + formVersion);
-        return questionRepo
-                .findQuestionByXPathAndFormIDAndFormVersion(previousPath, formID, formVersion)
-                .collectList()
-                .flatMap(new Function<List<Question>, Mono<Pair<Boolean, List<Question>>>>() {
-                    @Override
-                    public Mono<Pair<Boolean, List<Question>>> apply(List<Question> questions) {
-                        Pair<Boolean, List<Question>> response = Pair.of(false, new ArrayList<Question>());
-                        if (questions != null && questions.size() > 0) {
-                            log.info("ODKConsumerReactive:getPreviousQuestions:: questions size : " + questions.size());
-                            response = Pair.of(true, questions);
-                        }
-                        return Mono.just(response);
-                    }
-                });
+        // Removed due to redundancy
+        return Mono.empty();
+//        log.info("ODKConsumerReactive:getPreviousQuestions:: previousPath: " + previousPath + " :: formId: " + formID + " :: formVersion:" + formVersion);
+//        return questionRepo
+//                .findQuestionByXPathAndFormIDAndFormVersion(previousPath, formID, formVersion)
+//                .collectList()
+//                .flatMap(new Function<List<Question>, Mono<Pair<Boolean, List<Question>>>>() {
+//                    @Override
+//                    public Mono<Pair<Boolean, List<Question>>> apply(List<Question> questions) {
+//                        Pair<Boolean, List<Question>> response = Pair.of(false, new ArrayList<Question>());
+//                        if (questions != null && questions.size() > 0) {
+//                            log.info("ODKConsumerReactive:getPreviousQuestions:: questions size : " + questions.size());
+//                            response = Pair.of(true, questions);
+//                        }
+//                        return Mono.just(response);
+//                    }
+//                });
     }
 
     private Mono<Question> saveQuestion(Question question) {
@@ -827,18 +801,16 @@ public class ODKConsumerReactive extends TransformerProvider {
         return xMsgRepo.findFirstByAppAndUserIdAndFromIdAndMessageStateOrderByTimestampDesc(appName, userID, "admin", MessageState.SENT.name());
     }
 
-    private Mono<XMessage> decodeXMessage(XMessage xMessage, ServiceResponse response, String formID, Mono<Pair<Boolean, List<Question>>> updateQuestionAndAssessment) {
+    private Mono<XMessage> decodeXMessage(XMessage xMessage, ServiceResponse response, String formID) {
         XMessage nextMessage = getMessageFromResponse(xMessage, response);
         if (isEndOfForm(response)) {
             return appendNewResponse(formID, xMessage, response)
                     .flatMap(resp -> replaceUserState(formID, xMessage, response))
-                    .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(updateQuestionAndAssessment::subscribe)))
                     .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(() -> new UploadService().submit(response.currentResponseState, restTemplate, customRestTemplate))))
                     .flatMap(resp -> Mono.just(getClone(nextMessage)));
         } else {
             return appendNewResponse(formID, xMessage, response)
                     .flatMap(resp -> replaceUserState(formID, xMessage, response))
-                    .flatMap(resp -> Mono.defer(() -> Mono.fromCallable(updateQuestionAndAssessment::subscribe)))
                     .flatMap(resp -> Mono.just(getClone(nextMessage)));
         }
     }
@@ -980,5 +952,15 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     private String redisKeyWithPrefix(String key) {
         return System.getenv("ENV") + "-" + key;
+    }
+
+    private String md5sum(String data) {
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            md5.update(data.getBytes(StandardCharsets.UTF_8));
+            return String.format("%032x", new BigInteger(1, md5.digest()));
+        } catch (NoSuchAlgorithmException e) {
+            return null;
+        }
     }
 }

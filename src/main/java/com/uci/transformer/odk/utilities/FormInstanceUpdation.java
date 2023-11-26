@@ -15,12 +15,7 @@ import org.json.JSONObject;
 import org.springframework.web.client.RestTemplate;
 
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
-import static java.util.UUID.randomUUID;
+import java.util.*;
 
 @Builder
 @Getter
@@ -41,8 +36,6 @@ public class FormInstanceUpdation {
     public FormInstanceUpdation updateHiddenFields(ArrayNode hiddenFields, JSONObject user) {
         if(user == null) return this;
         if(hiddenFields == null) return this;
-    	UUID instanceID = randomUUID();
-        HashMap<String, String> fields = new HashMap<>();
         for(int i=0; i<hiddenFields.size(); i++){
             JsonNode object = hiddenFields.get(i);
             try{
@@ -53,11 +46,18 @@ public class FormInstanceUpdation {
             }
 
         }
-        fields.put("uuid", instanceID.toString());
-        try{
-            updateParams("instance_id", instanceID.toString());
-        }catch (Exception e) {
-            log.error("No instance_id hidden key");
+        return this;
+    }
+
+    public FormInstanceUpdation deleteHiddenFields(ArrayNode hiddenFields) {
+        if(hiddenFields == null) return this;
+        for(int i=0; i<hiddenFields.size(); i++){
+            JsonNode object = hiddenFields.get(i);
+            try{
+                deleteParams(object.findValue("name").asText().replaceAll("__", "_"));
+            }catch (PathNotFoundException p){
+                log.error("Unable to find key " + object.findValue("path") + " in the object supplied");
+            }
         }
         return this;
     }
@@ -89,6 +89,15 @@ public class FormInstanceUpdation {
         }
     }
 
+    public void deleteParams(String key) {
+        try {
+            boolean result =  hashMapper(this.instanceData,key,"");
+            if(!result) log.error("Could not find key "+ key);
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+    }
+
     public String getXML(){
     	XStream magicApi = new XStream(new StaxDriver()) {
             @Override
@@ -100,7 +109,8 @@ public class FormInstanceUpdation {
         });
     	magicApi.registerConverter(new MapEntryConverter());
         magicApi.alias("data", Map.class);
-        return magicApi.toXML(this.instanceData).replaceAll("__", "_");
+        return magicApi.toXML(this.instanceData)
+                .replaceAll("__", "_");
     }
 
     public Map<String, Object> parse(String xml) {
@@ -119,7 +129,4 @@ public class FormInstanceUpdation {
         this.instanceData = (Map<String, Object>) magicApi.fromXML(xml);
         return this.instanceData;
     }
-
-
-
 }

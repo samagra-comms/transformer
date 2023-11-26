@@ -4,7 +4,6 @@ import java.util.Arrays;
 
 import com.uci.adapter.cdn.FileCdnProvider;
 import com.uci.adapter.utils.CommonUtils;
-import com.uci.dao.models.XMessageDAO;
 import com.uci.transformer.odk.entity.Meta;
 import com.uci.transformer.odk.entity.Question;
 import com.uci.transformer.odk.repository.QuestionRepository;
@@ -16,7 +15,6 @@ import io.r2dbc.postgresql.codec.Json;
 import lombok.*;
 import lombok.extern.java.Log;
 import messagerosa.core.model.*;
-import reactor.core.publisher.Flux;
 
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.javarosa.core.model.*;
@@ -32,7 +30,6 @@ import org.javarosa.core.model.instance.utils.DefaultAnswerResolver;
 import org.javarosa.core.services.transport.payload.ByteArrayPayload;
 import org.javarosa.form.api.FormEntryController;
 import org.javarosa.form.api.FormEntryModel;
-import org.javarosa.form.api.FormEntryPrompt;
 import org.javarosa.model.xform.XFormSerializingVisitor;
 import org.javarosa.model.xform.XFormsModule;
 import org.javarosa.xform.parse.XFormParser;
@@ -40,20 +37,10 @@ import org.javarosa.xform.util.XFormUtils;
 import org.javarosa.xpath.XPathTypeMismatchException;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.HashOperations;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import java.io.*;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-
-import javax.annotation.PostConstruct;
 
 import static com.uci.transformer.odk.utilities.FileUtils.MEDIA_SUFFIX;
 import static org.javarosa.form.api.FormEntryController.ANSWER_OK;
@@ -69,7 +56,7 @@ class SaveStatus {
 }
 
 @Log
-public class MenuManager {
+public class UniLingualMenuManager {
 
     FormEntryController formController;
     String xpath;
@@ -91,15 +78,12 @@ public class MenuManager {
     XMessagePayload payload;
     String flow;
     Integer questionIndex;
-    RedisCacheService redisCacheService;
-    String userID;
     String appID;
     FileCdnProvider fileCdnProvider;
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath,
-                       String formID, RedisCacheService redisCacheService,
-                       String userID, String appID, XMessagePayload payload,
-                       FileCdnProvider fileCdnProvider) {
+    public UniLingualMenuManager(String xpath, String answer, String instanceXML, String formPath,
+                                 String formID, String appID, XMessagePayload payload,
+                                 FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -107,8 +91,6 @@ public class MenuManager {
         this.isSpecialResponse = false;
         this.isPrefilled = false;
         this.formID = formID;
-        this.redisCacheService = redisCacheService;
-        this.userID = userID;
         this.appID = appID;
         this.payload = payload;
         this.fileCdnProvider = fileCdnProvider;
@@ -116,7 +98,8 @@ public class MenuManager {
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID, JSONObject user, RedisCacheService redisCacheService, String userID, String appID, XMessagePayload payload) {
+    public UniLingualMenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
+                                 JSONObject user, String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -125,17 +108,15 @@ public class MenuManager {
         this.isPrefilled = false;
         this.formID = formID;
         this.user = user;
-        this.redisCacheService = redisCacheService;
-        this.userID = userID;
         this.appID = appID;
         this.payload = payload;
 
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo, RedisCacheService redisCacheService, String userID,
-                       String appID, XMessagePayload payload) {
+    public UniLingualMenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
+                                 Boolean isPrefilled, QuestionRepository questionRepo,
+                                 String appID, XMessagePayload payload) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -144,18 +125,16 @@ public class MenuManager {
         this.isPrefilled = isPrefilled;
         this.formID = formID;
         this.questionRepo = questionRepo;
-        this.redisCacheService = redisCacheService;
-        this.userID = userID;
         this.appID = appID;
         this.payload = payload;
         
         setAssesmentCharacters();
     }
 
-    public MenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
-                       Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
-                       boolean shouldUpdateFormXML, RedisCacheService redisCacheService, XMessage xMsg,
-                       FileCdnProvider fileCdnProvider) {
+    public UniLingualMenuManager(String xpath, String answer, String instanceXML, String formPath, String formID,
+                                 Boolean isPrefilled, QuestionRepository questionRepo, JSONObject user,
+                                 boolean shouldUpdateFormXML, XMessage xMsg,
+                                 FileCdnProvider fileCdnProvider) {
         this.xpath = xpath;
         this.answer = answer;
         this.instanceXML = instanceXML;
@@ -166,8 +145,6 @@ public class MenuManager {
         this.questionRepo = questionRepo;
         this.user=user;
         this.shouldUpdateFormXML = shouldUpdateFormXML;
-        this.redisCacheService = redisCacheService;
-        this.userID = xMsg.getTo().getUserID();
         this.appID = xMsg.getApp();
         this.payload = xMsg.getPayload();
         this.fileCdnProvider = fileCdnProvider;
@@ -225,6 +202,7 @@ public class MenuManager {
     }
 
     public ServiceResponse start() {
+        log.info("MenuManager::start: start");
         new XFormsModule().registerModule();
         
         FECWrapper fecWrapper = loadForm(formPath, xpath); // If instance load from instance (If form is filled load new)
@@ -233,15 +211,7 @@ public class MenuManager {
         String currentPath = "";
         String udpatedInstanceXML = "";
         XMessagePayload nextQuestion;
-        SaveStatus saveStatus = new SaveStatus();        
-        
-
-        String langCache = getFormLanguageCache();
-//    	log.info("MenuManager XPath: "+xpath);
-    	if(formController.getModel().getLanguages() != null && langCache != null && !langCache.isEmpty()) {
-        	setFormLanguage(langCache);
-        	log.info("1 Selected Lang: "+formController.getModel().getLanguage());
-    	}
+        SaveStatus saveStatus = new SaveStatus();
         
         log.info("MenuManager XPath: "+xpath);
         if(xpath != null && xpath.contains("opt_language") && formController.getModel().getLanguages() != null) {
@@ -413,48 +383,13 @@ public class MenuManager {
 			Integer nextIndex = formIndex.getNextLevel().getLocalIndex();
 			conversationLevel.add(nextIndex);
 		}
-        
+
+        log.info("MenuManager::start: end");
 		return new ServiceResponse(currentPath, nextQuestion, udpatedInstanceXML, formVersion, formID, question, conversationLevel,
                 saveStatus.getSaveStatus() == ANSWER_OK ? true : false
         );
     }
-    
-    private String getFormLanguageCache() {
-    	try {
-	    	if(this.redisCacheService != null) {
-	    		String key = this.userID;
-	    		if(this.appID != null) {
-	    			key = this.appID+"-"+key;
-	    		}
-	    		String language = (String)redisCacheService.getLanguageCache(key);
-	    	  	if(language != null) {
-	    	  		return language;
-	    	  	} else {
-	    	  		log.info("not found in redis for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
-	    	  	}
-	    	}
-    	} catch (Exception e) {
-    		log.info("Exception in getFormLanguageCache: "+e.getMessage());
-    	}
-    	return "English (en)";
-    }
-    
-    private void setFormLanguageCache(String language) {
-    	try {
-    		if(this.redisCacheService != null) {
-    			String key = this.userID;
-	    		if(this.appID != null) {
-	    			key = this.appID+"-"+key;
-	    		}
-        		redisCacheService.setLanguageCache(key, language);
-                log.info("Language set in redis: "+language+" for key: "+redisKeyWithPrefix("language")+", "+redisKeyWithPrefix(key));
-        	}
-    	} catch (Exception e) {
-    		log.info("Exception in setFormLanguageCache: "+e.getMessage());
-    	}
-    	
-    }
-    
+
     private String redisKeyWithPrefix(String key) {
     	return System.getenv("ENV")+"-"+key;
     }
@@ -480,7 +415,6 @@ public class MenuManager {
             	log.info("A lang "+i+": "+languages[i]);
                 if (lang.equals(languages[i])) {
                     formController.setLanguage(lang);
-                    setFormLanguageCache(lang);
                     break;
                 }
             }
@@ -1146,7 +1080,7 @@ public class MenuManager {
     }
 
     public FECWrapper loadForm(String formPath, String xpath) {
-
+        log.info("Load form called: start");
         if (formPath == null) {
             System.out.println("formPath is null");
             return null;
@@ -1186,7 +1120,7 @@ public class MenuManager {
             log.info("Initializing form.");
             final long start = System.currentTimeMillis();
             usedSavepoint = initializeForm(formDef, fec);
-            log.info("Form initialized in %.3f seconds." + (System.currentTimeMillis() - start) / 1000F);
+            log.info(String.format("Form initialized in %.3f seconds.", (System.currentTimeMillis() - start) / 1000F));
         } catch (RuntimeException e) {
             log.severe(e.getMessage());
             if (e.getCause() instanceof XPathTypeMismatchException) {
@@ -1217,6 +1151,7 @@ public class MenuManager {
                 fec.jumpToIndex(idx);
             }
         }
+        log.info("Load form called: end");
         return new FECWrapper(fec, usedSavepoint);
     }
     
