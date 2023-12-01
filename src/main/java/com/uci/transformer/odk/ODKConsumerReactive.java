@@ -163,7 +163,7 @@ public class ODKConsumerReactive extends TransformerProvider {
                 .doOnNext(new Consumer<ReceiverRecord<String, String>>() {
                     @Override
                     public void accept(ReceiverRecord<String, String> stringMessage) {
-                        processMessage(stringMessage.value());
+                        processMessage(stringMessage.value()).subscribe();
                     }
                 })
                 .doOnError(new Consumer<Throwable>() {
@@ -176,45 +176,43 @@ public class ODKConsumerReactive extends TransformerProvider {
 
     }
 
-    public void processMessage(String stringMessage) {
-        final long startTime = System.currentTimeMillis();
-        final Date startDateTime = new Date();
-        try {
-            XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
-            logTimeTaken(startTime, 1);
-            Mono.just(msg)
-                    .flatMap(this::transform)
-                    .subscribeOn(Schedulers.parallel())
-                    .subscribe(transformedMessage -> {
-                        long endTime = System.currentTimeMillis();
-                        long duration = (endTime - startTime);
-                        log.info("Total time spent in processing form: " + duration + ". Start: " + startDateTime + ". End: " + new Date());
-                        logTimeTaken(startTime, 2);
-                        if (transformedMessage != null) {
-                            try {
-                                if (transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
-                                        && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
-                                        && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
-                                    log.info("CP-04" + transformedMessage.toXML());
-                                    kafkaProducer.send(genericTransformer, transformedMessage.toXML());
-
-                                } else {
-                                    log.info("CP-05");
-                                    kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
-                                }
-                            } catch (JAXBException e) {
-                                log.error("An error occured : " + e.getMessage());
-                                e.printStackTrace();
-                            }
+    public Mono<String> processMessage(String stringMessage) {
+        return Mono.defer(() -> {
+            final long startTime = System.currentTimeMillis();
+            final Date startDateTime = new Date();
+            return Mono.fromCallable(() -> {
+                XMessage msg = XMessageParser.parse(new ByteArrayInputStream(stringMessage.getBytes()));
+                logTimeTaken(startTime, 1);
+                return msg;
+            })
+            .flatMap(this::transform)
+            .map(transformedMessage -> {
+                long endTime = System.currentTimeMillis();
+                long duration = (endTime - startTime);
+                log.info("Total time spent in processing form: " + duration + ". Start: " + startDateTime + ". End: " + new Date());
+                logTimeTaken(startTime, 2);
+                if (transformedMessage != null) {
+                    try {
+                        if (transformedMessage.getTransformers() != null && transformedMessage.getTransformers().get(0) != null
+                                && transformedMessage.getTransformers().get(0).getMetaData() != null && transformedMessage.getTransformers().get(0).getMetaData().get("type") != null
+                                && transformedMessage.getTransformers().get(0).getMetaData().get("type").equals("generic")) {
+                            log.info("CP-04" + transformedMessage.toXML());
+                            kafkaProducer.send(genericTransformer, transformedMessage.toXML());
+                        } else {
+                            log.info("CP-05");
+                            kafkaProducer.send(processOutboundTopic, transformedMessage.toXML());
                         }
-                    });
-        } catch (NullPointerException e) {
-            log.error("An error occured : " + e.getMessage() + " at line no : " + e.getStackTrace()[0].getLineNumber()
-                    + " in class : " + e.getStackTrace()[0].getClassName());
-        } catch (Exception e) {
-            log.error("An error occured : " + e.getMessage());
-            e.printStackTrace();
-        }
+                        return transformedMessage.toXML();
+                    } catch (JAXBException e) {
+                        log.error("An error occurred : " + e.getMessage());
+                        e.printStackTrace();
+                        return "";
+                    }
+                }
+                return "";
+            })
+            .subscribeOn(Schedulers.parallel());
+        });
     }
 
     @Override
