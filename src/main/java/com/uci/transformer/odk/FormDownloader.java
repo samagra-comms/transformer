@@ -5,15 +5,19 @@ import android.net.Uri;
 import com.uci.transformer.odk.model.Form;
 import com.uci.transformer.odk.model.FormDetails;
 import com.uci.transformer.odk.openrosa.OpenRosaAPIClient;
+import com.uci.transformer.odk.openrosa.OpenRosaHttpInterface;
+import com.uci.transformer.odk.openrosa.okhttp.OkHttpConnection;
+import com.uci.transformer.odk.openrosa.okhttp.OkHttpOpenRosaServerClientProvider;
 import com.uci.transformer.odk.persistance.FormsDao;
-import com.uci.transformer.odk.utilities.DocumentFetchResult;
-import com.uci.transformer.odk.utilities.FileUtils;
-import com.uci.transformer.odk.utilities.MediaFile;
+import com.uci.transformer.odk.persistance.JsonDB;
+import com.uci.transformer.odk.utilities.*;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 import org.javarosa.core.reference.ReferenceManager;
 import org.javarosa.core.reference.RootTranslator;
 import org.javarosa.xform.parse.XFormParser;
 import org.kxml2.kdom.Element;
+import org.springframework.util.FileSystemUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -23,6 +27,7 @@ import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,9 +49,14 @@ public class FormDownloader {
     private static final String NAMESPACE_OPENROSA_ORG_XFORMS_XFORMS_MANIFEST =
             "http:openrosa.org/xforms/xformsManifest";
 
-    public FormDownloader(FormsDao formsDao, OpenRosaAPIClient openRosaAPIClient) {
-        this.formsDao = formsDao;
-        this.openRosaAPIClient = openRosaAPIClient;
+    public FormDownloader() {
+        this.formsDao = new FormsDao(JsonDB.getInstance().getDB());
+        OpenRosaHttpInterface openRosaHttpInterface = new OkHttpConnection(
+                new OkHttpOpenRosaServerClientProvider(new OkHttpClient()),
+                null,
+                "userAgent"
+        );
+        this.openRosaAPIClient = new OpenRosaAPIClient(openRosaHttpInterface, new WebCredentialsUtils());
     }
 
     public static boolean isXformsManifestNamespacedElement(Element e) {
@@ -64,6 +74,41 @@ public class FormDownloader {
         TaskCancelledException() {
             super("Task was cancelled");
             this.file = null;
+        }
+    }
+
+    public void resetForms() {
+        File directoryToDelete = new File("/tmp/forms2");
+        FileSystemUtils.deleteRecursively(directoryToDelete);
+    }
+
+    public void downloadFormsDelta() {
+        File formsDir = new File("/tmp/forms2");
+        if (!formsDir.exists()) {
+            //Create a folder /tmp/forms2
+            new File("/tmp/forms2").mkdirs();
+        }
+
+        //Download fresh
+        WebCredentialsUtils webCredentialsUtils = new WebCredentialsUtils();
+        FormListDownloader formListDownloader = new FormListDownloader(
+                openRosaAPIClient,
+                webCredentialsUtils);
+        HashMap<String, FormDetails> formList = formListDownloader.downloadFormList(false);
+        int count = 0;
+        if (formList.size() > 0) {
+            ArrayList<FormDetails> forms = new ArrayList<>();
+            for (Map.Entry<String, FormDetails> form : formList.entrySet()) {
+                File existingForm = new File(formsDir.getAbsolutePath(), FormNameUtils.formatFilenameFromFormName(form.getValue().getFormName()) + ".xml");
+                if (!existingForm.exists()) {
+                    forms.add(form.getValue());
+                    count += 1;
+                }
+            }
+            downloadForms(forms);
+            List<Form> downloadedForms =  formsDao.getForms();
+            log.info("Total forms on disk: " + downloadedForms.size());
+            log.info("Total forms downloaded: " + count);
         }
     }
 

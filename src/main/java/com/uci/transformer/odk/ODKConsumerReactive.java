@@ -231,6 +231,7 @@ public class ODKConsumerReactive extends TransformerProvider {
         String formPath = getFormPath(formID);
         log.info("current form path:" + formPath);
         if (formPath == null) {
+            new FormDownloader().downloadFormsDelta();
             log.error("formPath null found return null value : " + formID);
             return Mono.empty();
         }
