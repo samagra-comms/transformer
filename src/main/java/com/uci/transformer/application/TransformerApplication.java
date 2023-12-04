@@ -57,64 +57,9 @@ public class TransformerApplication {
         if(!(downloadFormsFlag != null && downloadFormsFlag.equalsIgnoreCase("False"))) {
         	downloadForms();        	
         }
-    	// testFormManager();
-    }
-
-    private void testFormManager() {
-        String formPath = ODKConsumerReactive.getFormPath("samagra_workflows_form");
-        ServiceResponse response1 = new FormManager(null, null, null, formPath).start();
-        log.debug("First response");
-        log.debug(response1.getCurrentIndex(), response1.getNextMessage().getText());
     }
 
     private void downloadForms() {
-        //Empty the database and folder
-        FormsDao dao;
-        try{
-            File directoryToDelete = new File("/tmp/forms2");
-            FileSystemUtils.deleteRecursively(directoryToDelete);
-            dao = new FormsDao(JsonDB.getInstance().getDB());
-            dao.deleteFormsDatabase();
-        }catch (Exception e){}
-
-        //Create a folder /tmp/forms
-        new File("/tmp/forms2").mkdirs();
-
-        //Download fresh
-        OpenRosaHttpInterface openRosaHttpInterface = new OkHttpConnection(
-                new OkHttpOpenRosaServerClientProvider(new OkHttpClient()),
-                null,
-                "userAgent"
-        );
-        WebCredentialsUtils webCredentialsUtils = new WebCredentialsUtils();
-        OpenRosaAPIClient openRosaAPIClient = new OpenRosaAPIClient(openRosaHttpInterface, webCredentialsUtils);
-        FormListDownloader formListDownloader = new FormListDownloader(
-                openRosaAPIClient,
-                webCredentialsUtils);
-        HashMap<String, FormDetails> formList = formListDownloader.downloadFormList(false);
-        int count = 0;
-        if (formList.size() > 0) {
-            ArrayList<FormDetails> forms = new ArrayList<>();
-            for (Map.Entry<String, FormDetails> form : formList.entrySet()) {
-                forms.add(form.getValue());
-                count += 1;
-            }
-            FormDownloader formDownloader = null;
-            dao = new FormsDao(JsonDB.getInstance().getDB());
-            formDownloader = new FormDownloader(dao, openRosaAPIClient);
-            formDownloader.downloadForms(forms);
-            List<Form> downloadedForms =  dao.getForms();
-            log.info("Total downloaded forms: " + downloadedForms.size());
-        }
+        new FormDownloader().downloadFormsDelta();
     }
-//    @Bean
-//    CommandLineRunner executeOnStartup(Scheduler scheduler, Task<Void> sampleOneTimeTask) {
-//        log.info("Scheduling one time task to now!");
-//
-//        return ignored -> scheduler.schedule(
-//                sampleOneTimeTask.instance("command-line-runner"),
-//                Instant.now()
-//        );
-//    }
 }
-
