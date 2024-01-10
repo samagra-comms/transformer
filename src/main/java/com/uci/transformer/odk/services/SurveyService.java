@@ -78,19 +78,21 @@ public class SurveyService {
                     return user;
                 } else {
                     JSONObject user = new JSONObject();
-                    user.put(hiddenName, "");
+                    user.put(hiddenName, phone);
                     return user;
                 }
             } catch (Exception e) {
                 log.error("error : " + e.getMessage());
                 JSONObject user = new JSONObject();
-                user.put(hiddenName, "");
+                user.put(hiddenName, phone);
                 return user;
             }
         } catch (IOException e) {
             e.printStackTrace();
+            JSONObject user = new JSONObject();
+            user.put(hiddenName, phone);
+            return user;
         }
-        return null;
     }
 
 }
