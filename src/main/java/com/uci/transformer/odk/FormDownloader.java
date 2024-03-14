@@ -96,10 +96,12 @@ public class FormDownloader {
                 webCredentialsUtils);
         HashMap<String, FormDetails> formList = formListDownloader.downloadFormList(false);
         int count = 0;
+        log.info("Total forms received in form list: " + formList.size());
         if (formList.size() > 0) {
             ArrayList<FormDetails> forms = new ArrayList<>();
             for (Map.Entry<String, FormDetails> form : formList.entrySet()) {
                 File existingForm = new File(formsDir.getAbsolutePath(), FormNameUtils.formatFilenameFromFormName(form.getValue().getFormName()) + ".xml");
+                log.info("Found existing form: " + existingForm.getAbsolutePath());
                 if (!existingForm.exists()) {
                     forms.add(form.getValue());
                     count += 1;
